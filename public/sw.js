@@ -1,6 +1,29 @@
 // Bumped whenever a precached file changes — activate() then drops every
 // older cache, so installed apps pick up the new icon set / splash marks.
 const CACHE_NAME = "ominira-shell-v12";
+// Offline reading. None of these are cleared on activate — an app update
+// shouldn't make readers redownload what they've already opened.
+//  - documents: PDF/DOCX source files, written by the page itself
+//    (lib/offline/documentCache.ts — same name there).
+//  - content: book text from /api/materials/{id} — immutable per material id
+//    (see that route's Cache-Control).
+//  - pages: the last copy of each reader page (/read/<slug>, /reader/<slug>),
+//    the offline fallback for opening a book already opened online.
+//  - static: hashed /_next/static build files (JS, CSS, fonts, PDFium's
+//    wasm) and PDFium's versioned CDN fallback fonts — what a cached page
+//    needs to actually run.
+//  - media: in-book images from Storage.
+const DOCUMENT_CACHE_NAME = "ominira-documents-v1";
+const CONTENT_CACHE_NAME = "ominira-content-v1";
+const PAGE_CACHE_NAME = "ominira-pages-v1";
+const STATIC_CACHE_NAME = "ominira-static-v1";
+const MEDIA_CACHE_NAME = "ominira-media-v1";
+const KEPT_CACHES = [CACHE_NAME, DOCUMENT_CACHE_NAME, CONTENT_CACHE_NAME, PAGE_CACHE_NAME, STATIC_CACHE_NAME, MEDIA_CACHE_NAME];
+// Entry caps, oldest dropped first. Static grows by one build's worth of
+// files per deploy; keeping a few builds lets an older cached page still run.
+const STATIC_MAX_ENTRIES = 600;
+const MEDIA_MAX_ENTRIES = 500;
+const PAGE_MAX_ENTRIES = 100;
 // Launch artwork is part of the PWA shell, not page content: it needs to be
 // available before a network request can complete on a cold app start. Cache
 // both themes because the reader preference is restored client-side. Paths
@@ -29,23 +52,139 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) =>
+        Promise.all(
+          keys.filter((key) => !KEPT_CACHES.includes(key)).map((key) => caches.delete(key))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });
 
-// Network-first for navigations (so readers always get fresh content when
-// online), falling back to the cached shell only when offline. Everything
-// else (audio, fonts, JSON, etc.) passes straight through — this app's
-// narration/voice-note data is generated per-session and isn't meant to be
-// cached wholesale by a blanket service worker.
+async function trimCache(name, maxEntries) {
+  const cache = await caches.open(name);
+  const keys = await cache.keys();
+  await Promise.all(keys.slice(0, Math.max(0, keys.length - maxEntries)).map((key) => cache.delete(key)));
+}
+
+/** Cache-first, for responses that never change at a given URL. Opaque or
+ * failed responses aren't stored. `request` overrides what's fetched (and
+ * keyed) — e.g. a CORS refetch of a no-cors <img>, whose opaque response
+ * couldn't be checked and is padded to megabytes against the quota. */
+async function cacheFirst(event, name, maxEntries, request = event.request) {
+  const cache = await caches.open(name);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) {
+    const copy = response.clone();
+    event.waitUntil(cache.put(request, copy).then(() => (maxEntries ? trimCache(name, maxEntries) : undefined)));
+  }
+  return response;
+}
+
+function storeReaderPage(key, response) {
+  return caches
+    .open(PAGE_CACHE_NAME)
+    .then((cache) => cache.put(key, response))
+    .then(() => trimCache(PAGE_CACHE_NAME, PAGE_MAX_ENTRIES));
+}
+
+/** Most books open through an in-app link — a client-side RSC fetch, never a
+ * navigation — so the navigation handler alone would rarely see a reader
+ * page. The first time one opens that way, its full HTML is fetched once in
+ * the background so it can be reopened offline. */
+async function cacheReaderPageIfMissing(key) {
+  if (await caches.match(key, { cacheName: PAGE_CACHE_NAME })) return;
+  const response = await fetch(key, { credentials: "same-origin" });
+  if (response.ok && !response.redirected) await storeReaderPage(key, response);
+}
+
+const READER_PAGE = /^\/(read|reader)\/[^/]+\/?$/;
+
+/** Mirrors app/api/materials/[materialId]/route.ts's own content check —
+ * only book content is immutable; editable fields (title, …) aren't cached. */
+function isMaterialContent(url) {
+  if (!/^\/api\/materials\/[^/]+$/.test(url.pathname)) return false;
+  const params = url.searchParams;
+  const fields = (params.get("fields") || "").split(",").map((f) => f.trim());
+  return (
+    params.get("fullContent") === "true" ||
+    params.has("sectionId") ||
+    fields.some((f) => f === "sections" || f === "narrators" || f === "notes")
+  );
+}
+
+// Network-first for navigations (so readers always get fresh pages when
+// online). Reader pages keep their last good copy, so a book opened online
+// opens again offline; anything else falls back to the cached shell.
+// Book content, build files and in-book images are cache-first (all
+// immutable at their URLs). Everything else (audio, annotations, feeds, …)
+// passes straight through — narration/voice-note data is generated
+// per-session and isn't meant to be cached wholesale.
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+  const url = new URL(request.url);
+  const sameOrigin = url.origin === self.location.origin;
 
   if (request.mode === "navigate") {
+    const isReaderPage = sameOrigin && READER_PAGE.test(url.pathname);
     event.respondWith(
-      fetch(request).catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
+      fetch(request)
+        .then((response) => {
+          if (isReaderPage && response.ok && !response.redirected) {
+            const copy = response.clone();
+            // Keyed by path alone: ?section=/?page= only pick a starting
+            // point, and the page restores its own position offline.
+            event.waitUntil(storeReaderPage(url.origin + url.pathname, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached =
+            (isReaderPage && (await caches.match(url.origin + url.pathname, { cacheName: PAGE_CACHE_NAME }))) ||
+            (await caches.match(request));
+          return cached || caches.match("/");
+        })
+    );
+    return;
+  }
+
+  // A real (not prefetch) client-side open of a reader page. Passed through
+  // untouched; only the background page save rides along.
+  if (
+    sameOrigin &&
+    READER_PAGE.test(url.pathname) &&
+    request.headers.get("RSC") === "1" &&
+    !request.headers.has("Next-Router-Prefetch") &&
+    !request.headers.has("Next-Router-Segment-Prefetch")
+  ) {
+    event.waitUntil(cacheReaderPageIfMissing(url.origin + url.pathname).catch(() => {}));
+    return;
+  }
+
+  if (sameOrigin && url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(cacheFirst(event, STATIC_CACHE_NAME, STATIC_MAX_ENTRIES));
+    return;
+  }
+  if (url.hostname === "cdn.jsdelivr.net" && url.pathname.startsWith("/npm/@embedpdf/")) {
+    event.respondWith(cacheFirst(event, STATIC_CACHE_NAME, STATIC_MAX_ENTRIES));
+    return;
+  }
+  if (sameOrigin && isMaterialContent(url)) {
+    event.respondWith(cacheFirst(event, CONTENT_CACHE_NAME));
+    return;
+  }
+  if (
+    request.destination === "image" &&
+    url.hostname.endsWith(".supabase.co") &&
+    url.pathname.startsWith("/storage/v1/object/public/")
+  ) {
+    event.respondWith(
+      cacheFirst(event, MEDIA_CACHE_NAME, MEDIA_MAX_ENTRIES, new Request(url.href, { mode: "cors", credentials: "omit" })).catch(
+        () => fetch(request)
+      )
     );
     return;
   }

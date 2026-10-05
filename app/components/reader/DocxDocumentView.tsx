@@ -9,7 +9,20 @@ import DocumentEndPanel from "./DocumentEndPanel";
 import { useArticleTypographyStyle } from "@/lib/reader/useArticleTypographyStyle";
 import ReaderHeader from "./ReaderHeader";
 import { ARTICLE_SCROLL_CLASS, useArticleAnnotations } from "./useArticleAnnotations";
+import { cacheDocument, readCachedDocument } from "@/lib/offline/documentCache";
 import Loader from "../Loader";
+
+/** The .docx bytes — the device's copy when this document was opened before
+ * (lib/offline/documentCache.ts), otherwise downloaded once and kept. */
+async function loadDocx(url: string): Promise<ArrayBuffer> {
+  const cached = await readCachedDocument(url);
+  if (cached) return cached;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+  const buffer = await res.arrayBuffer();
+  cacheDocument(url, buffer, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  return buffer;
+}
 
 const TOP_BAR_HEIGHT_PX = 60;
 const RAIL_INSET_PX = 16;
@@ -66,9 +79,7 @@ export default function DocxDocumentView({
     let cancelled = false;
     (async () => {
       try {
-        const [{ default: mammoth }, res] = await Promise.all([import("mammoth"), fetch(sourceUrl)]);
-        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-        const arrayBuffer = await res.arrayBuffer();
+        const [{ default: mammoth }, arrayBuffer] = await Promise.all([import("mammoth"), loadDocx(sourceUrl)]);
         const { value } = await mammoth.convertToHtml({ arrayBuffer });
         if (!cancelled) setMarkup({ __html: value });
       } catch {

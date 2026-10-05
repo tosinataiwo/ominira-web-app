@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cacheDocument, readCachedDocument } from "@/lib/offline/documentCache";
 
 /** Why a PDF couldn't be fetched — distinguished because the reader says
  * different things for each: a network problem is worth retrying, a file that
@@ -46,6 +47,10 @@ async function fetchPdf(
   signal: AbortSignal,
   onProgress: (progress: PdfDownloadProgress) => void
 ): Promise<ArrayBuffer> {
+  const cached = await readCachedDocument(url);
+  if (cached && looksLikePdf(cached)) return cached;
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
   let response: Response;
   try {
     response = await fetch(url, { signal });
@@ -98,6 +103,7 @@ async function fetchPdf(
   if (buffer.byteLength === 0 || !looksLikePdf(buffer)) {
     throw new PdfFetchError("not-pdf", "This file isn't a readable PDF.");
   }
+  cacheDocument(url, buffer, "application/pdf");
   return buffer;
 }
 
@@ -110,7 +116,8 @@ async function fetchPdf(
  *
  * Runs alongside the engine's startup rather than after it: both are mostly
  * network, so the reader waits for the slower of the two, not their sum.
- * `generation` refetches, for Retry.
+ * `generation` refetches, for Retry. Opened once, a document is read from the
+ * device's copy (lib/offline/documentCache.ts) from then on, online or not.
  */
 export function usePdfBytes(url: string, generation: number) {
   const [state, setState] = useState<{
