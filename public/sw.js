@@ -19,8 +19,11 @@ const PAGE_CACHE_NAME = "ominira-pages-v1";
 const STATIC_CACHE_NAME = "ominira-static-v1";
 const MEDIA_CACHE_NAME = "ominira-media-v1";
 const KEPT_CACHES = [CACHE_NAME, DOCUMENT_CACHE_NAME, CONTENT_CACHE_NAME, PAGE_CACHE_NAME, STATIC_CACHE_NAME, MEDIA_CACHE_NAME];
-// Entry caps, oldest dropped first. Static grows by one build's worth of
-// files per deploy; keeping a few builds lets an older cached page still run.
+// Entry caps. Pages and media are trimmed least recently used first (a hit
+// re-stores the entry — see touch()), so a book reread daily outlives one
+// opened once months ago. Static stays oldest-first: it grows by one build's
+// worth of files per deploy, and keeping a few builds lets an older cached
+// page still run.
 const STATIC_MAX_ENTRIES = 600;
 const MEDIA_MAX_ENTRIES = 500;
 const PAGE_MAX_ENTRIES = 100;
@@ -61,6 +64,13 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/** Re-stores a hit so it moves to the end of keys() — Cache.put replaces a
+ * matching entry by appending — which is what makes trimCache drop the least
+ * recently used entry rather than the least recently saved. */
+function touch(event, cache, key, cached) {
+  event.waitUntil(cache.put(key, cached.clone()).catch(() => {}));
+}
+
 async function trimCache(name, maxEntries) {
   const cache = await caches.open(name);
   const keys = await cache.keys();
@@ -70,11 +80,15 @@ async function trimCache(name, maxEntries) {
 /** Cache-first, for responses that never change at a given URL. Opaque or
  * failed responses aren't stored. `request` overrides what's fetched (and
  * keyed) — e.g. a CORS refetch of a no-cors <img>, whose opaque response
- * couldn't be checked and is padded to megabytes against the quota. */
-async function cacheFirst(event, name, maxEntries, request = event.request) {
+ * couldn't be checked and is padded to megabytes against the quota. `lru`
+ * marks hits as recently used (see touch()). */
+async function cacheFirst(event, name, { maxEntries, request = event.request, lru = false } = {}) {
   const cache = await caches.open(name);
   const cached = await cache.match(request);
-  if (cached) return cached;
+  if (cached) {
+    if (lru) touch(event, cache, request, cached);
+    return cached;
+  }
   const response = await fetch(request);
   if (response.ok) {
     const copy = response.clone();
@@ -93,9 +107,12 @@ function storeReaderPage(key, response) {
 /** Most books open through an in-app link — a client-side RSC fetch, never a
  * navigation — so the navigation handler alone would rarely see a reader
  * page. The first time one opens that way, its full HTML is fetched once in
- * the background so it can be reopened offline. */
-async function cacheReaderPageIfMissing(key) {
-  if (await caches.match(key, { cacheName: PAGE_CACHE_NAME })) return;
+ * the background so it can be reopened offline; after that, an open only
+ * marks the saved copy as recently used. */
+async function saveOrTouchReaderPage(event, key) {
+  const cache = await caches.open(PAGE_CACHE_NAME);
+  const cached = await cache.match(key);
+  if (cached) return touch(event, cache, key, cached);
   const response = await fetch(key, { credentials: "same-origin" });
   if (response.ok && !response.redirected) await storeReaderPage(key, response);
 }
@@ -142,10 +159,16 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(async () => {
-          const cached =
-            (isReaderPage && (await caches.match(url.origin + url.pathname, { cacheName: PAGE_CACHE_NAME }))) ||
-            (await caches.match(request));
-          return cached || caches.match("/");
+          if (isReaderPage) {
+            const key = url.origin + url.pathname;
+            const pages = await caches.open(PAGE_CACHE_NAME);
+            const page = await pages.match(key);
+            if (page) {
+              touch(event, pages, key, page);
+              return page;
+            }
+          }
+          return (await caches.match(request)) || caches.match("/");
         })
     );
     return;
@@ -160,16 +183,16 @@ self.addEventListener("fetch", (event) => {
     !request.headers.has("Next-Router-Prefetch") &&
     !request.headers.has("Next-Router-Segment-Prefetch")
   ) {
-    event.waitUntil(cacheReaderPageIfMissing(url.origin + url.pathname).catch(() => {}));
+    event.waitUntil(saveOrTouchReaderPage(event, url.origin + url.pathname).catch(() => {}));
     return;
   }
 
   if (sameOrigin && url.pathname.startsWith("/_next/static/")) {
-    event.respondWith(cacheFirst(event, STATIC_CACHE_NAME, STATIC_MAX_ENTRIES));
+    event.respondWith(cacheFirst(event, STATIC_CACHE_NAME, { maxEntries: STATIC_MAX_ENTRIES }));
     return;
   }
   if (url.hostname === "cdn.jsdelivr.net" && url.pathname.startsWith("/npm/@embedpdf/")) {
-    event.respondWith(cacheFirst(event, STATIC_CACHE_NAME, STATIC_MAX_ENTRIES));
+    event.respondWith(cacheFirst(event, STATIC_CACHE_NAME, { maxEntries: STATIC_MAX_ENTRIES }));
     return;
   }
   if (sameOrigin && isMaterialContent(url)) {
@@ -182,9 +205,11 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/storage/v1/object/public/")
   ) {
     event.respondWith(
-      cacheFirst(event, MEDIA_CACHE_NAME, MEDIA_MAX_ENTRIES, new Request(url.href, { mode: "cors", credentials: "omit" })).catch(
-        () => fetch(request)
-      )
+      cacheFirst(event, MEDIA_CACHE_NAME, {
+        maxEntries: MEDIA_MAX_ENTRIES,
+        request: new Request(url.href, { mode: "cors", credentials: "omit" }),
+        lru: true,
+      }).catch(() => fetch(request))
     );
     return;
   }
