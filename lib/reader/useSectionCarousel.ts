@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { chromeHiddenAfterScroll, isAtBottom } from "./useScrollChrome";
 
 // Swipe must be clearly horizontal and past this distance before it's read as
 // "turn the page" — otherwise an ordinary vertical scroll/drag inside a tall
@@ -150,13 +151,13 @@ export function useSectionCarousel({
         ticking = false;
         const top = el.scrollTop;
         const last = lastScrollTopRef.current;
-        if (top <= 0 || top < last - 4) setChromeHidden(false);
-        else if (top > last + 4) setChromeHidden(true);
+        const hidden = chromeHiddenAfterScroll(top, last);
+        if (hidden !== undefined) setChromeHidden(hidden);
         lastScrollTopRef.current = top;
         const max = el.scrollHeight - el.clientHeight;
         const intraFraction = max > 0 ? Math.min(1, Math.max(0, top / max)) : 0;
         setScrollPct(total > 0 ? (activeIndex + intraFraction) / total : 0);
-        setAtBottom(max <= 0 || top >= max - 4);
+        setAtBottom(isAtBottom(el));
         onScroll?.();
       });
     };
@@ -173,7 +174,7 @@ export function useSectionCarousel({
     const max = el.scrollHeight - el.clientHeight;
     const intraFraction = max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 0;
     setScrollPct(total > 0 ? (activeIndex + intraFraction) / total : 0);
-    setAtBottom(max <= 0 || el.scrollTop >= max - 4);
+    setAtBottom(isAtBottom(el));
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
     // eslint-disable-next-line react-hooks/exhaustive-deps

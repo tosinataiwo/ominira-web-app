@@ -8,6 +8,7 @@ import { useTextSelection } from "@/lib/annotations/useTextSelection";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
 import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
+import { useScrollChrome } from "@/lib/reader/useScrollChrome";
 import { PENDING_ANNOTATION_ID, useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { useReaderStore } from "@/stores/reader-store";
 import { useSessionStore } from "@/stores/session-store";
@@ -92,6 +93,7 @@ export function useDocumentAnnotations({
   } = annotations;
 
   const feed = useBookAnnotationFeed({ materialId, locate });
+  const scrollChrome = useScrollChrome(scrollEl);
   const { close: closeFeed } = feed;
   const onMarkClick = useCallback(
     (block: string, annotationId: string) => {
@@ -100,11 +102,6 @@ export function useDocumentAnnotations({
     },
     [closeFeed, onNoteMarkerClick]
   );
-  const toggleFeed = () => {
-    if (feed.open) return feed.close();
-    closeNotesPanel();
-    feed.openFeed();
-  };
   const jumpToEntry = useCallback((entry: FeedEntry) => jumpToBlock(entry.passageId), [jumpToBlock]);
 
   const selectionOverlay = useTextSelection({
@@ -211,16 +208,17 @@ export function useDocumentAnnotations({
           </div>
         </div>
       )}
+      {/* The same rail as the EPUB reader, on the same lifecycle: it hides
+          while the notes panel or feed is up or text is selected, hides on
+          scroll-down unless the reader is at the end, and folds once the
+          reader scrolls on. */}
       <NotesFeedFab
         materialId={materialId}
-        noteAuthors={feed.noteAuthors(activeSectionId)}
-        noteCount={feed.totalNoteCount}
-        onOpenAuthor={(authorId) => {
-          closeNotesPanel();
-          feed.openFeed(authorId);
-        }}
-        onOpenFeed={toggleFeed}
-        visible={!selection}
+        feed={feed}
+        activeSectionId={activeSectionId}
+        closeNotesPanel={closeNotesPanel}
+        visible={!notesPanel && !feed.open && !selection && (!scrollChrome.hidden || scrollChrome.atBottom)}
+        scrolledAway={scrollChrome.hidden && !scrollChrome.atBottom}
       />
     </>
   );

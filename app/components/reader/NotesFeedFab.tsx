@@ -9,20 +9,22 @@ import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { useProfile } from "@/lib/auth/useProfile";
 import { LiveBadge, LiveMark, compact, notesLabel, usePresence, type Live } from "./ReaderPresence";
 import { avatarRingColor, type Avatar } from "@/lib/avatar/avatar";
-import type { NoteAuthor } from "@/lib/reader/useBookAnnotationFeed";
+import type { BookAnnotationFeed, NoteAuthor } from "@/lib/reader/useBookAnnotationFeed";
 
 type Props = {
   materialId: string;
-  /** Other readers who wrote in this material, those in the current run
-   * first — see useBookAnnotationFeed's noteAuthors. */
-  noteAuthors: NoteAuthor[];
-  /** Every note in the book, the reader's own included — the notes panel's
-   * own header count. */
-  noteCount: number;
-  /** Opens the notes panel narrowed to one comrade's notes. */
-  onOpenAuthor: (readerId: string) => void;
-  onOpenFeed: () => void;
-  /** Same lifecycle as ChapterNavFooter (footerVisible && !selection) — a
+  /** The book's notes feed (useBookAnnotationFeed) — the rail reads its
+   * authors and count, and opens it: toggled from the chat bubble, narrowed
+   * to one comrade from their card. Every format hands over its own feed and
+   * this does the rest, so the rail behaves the same in all of them. */
+  feed: BookAnnotationFeed;
+  /** The run the reader is in, so whoever wrote there leads the faces. */
+  activeSectionId?: string;
+  /** Closes the per-thread notes panel — it shares the feed's slot, so the
+   * feed opening takes it over. */
+  closeNotesPanel: () => void;
+  /** Same lifecycle as the rest of the reader chrome in every format (EPUB's
+   * ChapterNavFooter, useScrollChrome in the document readers) — a
    * persistent, always-on FAB turned out to undercut the distraction-free
    * reading experience per reader feedback, so this shows/hides on
    * scroll-up/tap/reaching-the-bottom exactly like the rest of the reader
@@ -51,13 +53,13 @@ type Face = {
 type Bubble = { title: ReactNode; detail: string | false };
 
 const MAX_FACES = 3;
-/** How long the arrival message stays out. */
+/** How long the greeting stays out. */
 const INTRO_MS = 5500;
 /** Lets the faces pop in before the message joins them. */
 const INTRO_DELAY_MS = 700;
 const CARD_MS = 6000;
 
-// The arrival message is a greeting, not a notification — once per book per
+// The greeting is just that, not a notification — once per book per
 // visit to the app, so paging back and forth never replays it.
 const introduced = new Set<string>();
 
@@ -78,8 +80,8 @@ const introduced = new Set<string>();
  * from, what they're doing, how many notes they left — and tapping the card
  * opens the notes panel on just their notes.
  *
- * On arrival, once per book, a short message says who's here ("3 currently
- * reading · Comrade Ada wrote here") and tucks away again. With nobody else
+ * The first time the rail is opened in a book, a short message says who's
+ * here ("3 currently reading · Comrade Ada wrote here") and tucks away again. With nobody else
  * here the open rail is just the chat bubble and the reader's own face.
  *
  * "Currently reading" is fetched once on arrival (usePresence) — a snapshot
@@ -90,21 +92,34 @@ const introduced = new Set<string>();
  */
 export default function NotesFeedFab({
   materialId,
-  noteAuthors,
-  noteCount,
-  onOpenAuthor,
-  onOpenFeed,
+  feed,
+  activeSectionId,
+  closeNotesPanel,
   visible,
   scrolledAway = false,
 }: Props) {
+  const noteAuthors = feed.noteAuthors(activeSectionId);
+  const noteCount = feed.totalNoteCount;
+  const onOpenAuthor = (readerId: string) => {
+    closeNotesPanel();
+    feed.openFeed(readerId);
+  };
+  const onOpenFeed = () => {
+    if (feed.open) return feed.close();
+    closeNotesPanel();
+    feed.openFeed();
+  };
   const { data: me } = useProfile();
   const presence = usePresence(materialId);
-  // Open by default on arrival; folds when the reader closes it or scrolls
-  // the chrome away, and comes back as the bare FAB until they reopen it.
-  const [folded, setFolded] = useState(false);
-  useEffect(() => {
+  // Folded on arrival in every format — just the reader's own seat, nothing
+  // between them and the text. Tapping it opens the rail; closing it or
+  // scrolling the chrome away folds it back.
+  const [folded, setFolded] = useState(true);
+  const [wasScrolledAway, setWasScrolledAway] = useState(scrolledAway);
+  if (scrolledAway !== wasScrolledAway) {
+    setWasScrolledAway(scrolledAway);
     if (scrolledAway) setFolded(true);
-  }, [scrolledAway]);
+  }
 
   const readerById = new Map(presence.others.map((r) => [r.readerId, r]));
   const faces: Face[] = [];

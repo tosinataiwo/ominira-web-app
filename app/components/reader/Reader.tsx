@@ -1273,19 +1273,9 @@ export default function Reader({
 
       <NotesFeedFab
         materialId={materialId}
-        noteAuthors={noteFeed.noteAuthors(activeSectionId)}
-        noteCount={noteFeed.totalNoteCount}
-        onOpenAuthor={(authorId) => {
-          closeNotesPanel();
-          noteFeed.openFeed(authorId);
-        }}
-        onOpenFeed={() => {
-          if (noteFeed.open) noteFeed.close();
-          else {
-            closeNotesPanel();
-            noteFeed.openFeed();
-          }
-        }}
+        feed={noteFeed}
+        activeSectionId={activeSectionId}
+        closeNotesPanel={closeNotesPanel}
         // Same lifecycle as ChapterNavFooter itself, not an independent
         // always-on FAB — see NotesFeedFab's own doc comment. Deliberately
         // not also gated on !anyPlayerActive the way the footer's own

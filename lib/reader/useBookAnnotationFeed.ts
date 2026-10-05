@@ -213,3 +213,5 @@ export function useBookAnnotationFeed({
     close,
   };
 }
+
+export type BookAnnotationFeed = ReturnType<typeof useBookAnnotationFeed>;
