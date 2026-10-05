@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiFetch } from "@/lib/api/client";
 import type { Section } from "@/lib/book/schema";
+
+/** Book content is public and immutable between publishes, so it's fetched
+ * without apiFetch's `Authorization` header — Vercel's CDN refuses to cache
+ * any request carrying one, and the route's Cache-Control (app/api/materials/
+ * [materialId]/route.ts) is what keeps whole-book JSON off Fast Origin
+ * Transfer. */
+async function fetchContent<T>(path: string): Promise<T> {
+  const res = await fetch(`/api${path}`);
+  if (!res.ok) throw new Error(`GET ${path} failed (${res.status})`);
+  return (await res.json()) as T;
+}
 
 /** Walks a (possibly nested) section, collecting its own id plus every
  * descendant's — used to mark a whole fetched subtree "has real text now"
@@ -112,7 +122,7 @@ export function useProgressiveText({
       const existing = inFlightRef.current.get(sectionId);
       if (existing) return existing;
 
-      const promise = apiFetch<{ sections: Section }>(
+      const promise = fetchContent<{ sections: Section }>(
         `/materials/${materialId}?fields=sections&sectionId=${encodeURIComponent(sectionId)}`
       )
         .then((data) => {
@@ -146,7 +156,7 @@ export function useProgressiveText({
   // of forever returning the same dead, already-caught promise.
   const loadAllTextInBackground = useCallback((): Promise<Section[]> => {
     if (!backgroundPromiseRef.current) {
-      backgroundPromiseRef.current = apiFetch<{ sections: Section[] }>(
+      backgroundPromiseRef.current = fetchContent<{ sections: Section[] }>(
         `/materials/${materialId}?fields=sections&fullContent=true`
       )
         .then((data) => {

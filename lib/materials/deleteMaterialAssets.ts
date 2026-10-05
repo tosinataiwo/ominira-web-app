@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
+import { invalidateMaterialStorage } from "./storageCache";
 import { STORAGE_BUCKET } from "@/lib/storage/config";
 
 /** Escapes a slug for use inside a RegExp — slugs are URL-safe already, but
@@ -48,6 +49,7 @@ async function listAll(
 export async function deleteMaterialAssets(slug: string): Promise<{ removed: string[]; errors: string[] }> {
   const admin = getSupabaseAdminClient();
   const errors: string[] = [];
+  invalidateMaterialStorage(slug);
   const paths: string[] = [`books/${slug}.json`, `books/${slug}-manifest.json`];
 
   // Cover + thumbnail: extension varies (whatever the source image was), and

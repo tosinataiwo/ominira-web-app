@@ -5,6 +5,11 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { MaterialSectionNotFoundError, projectMaterial } from "@/lib/materials/projection";
 import { STORAGE_BUCKET, objectPathFromPublicUrl } from "@/lib/storage/config";
+import { invalidateMaterialStorage } from "@/lib/materials/storageCache";
+
+const CONTENT_FIELDS = new Set(["sections", "narrators", "notes"]);
+const CONTENT_CACHE = "public, max-age=31536000, immutable";
+const METADATA_CACHE = "public, max-age=0, s-maxage=60, stale-while-revalidate=300";
 
 export async function GET(request: Request, { params }: { params: Promise<{ materialId: string }> }) {
   const { materialId } = await params;
@@ -25,7 +30,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
 
   try {
     const projected = await projectMaterial(row, { fields, sectionId, passagesOnly, fullContent });
-    return NextResponse.json(projected);
+    // Every reader open fetches the whole book's text through here
+    // (useProgressiveText's background wave) — uncached, that's multi-MB of
+    // uncompressed JSON per open billed as Vercel Fast Origin Transfer, the
+    // Hobby limit that kept pausing deployments. Book content never changes
+    // once published, and the URL is keyed by the material's own id (never
+    // reused, unlike a slug), so the browser and Vercel's CDN keep it for a
+    // year; DB-only
+    // fields (title, author, …) are editable, so those get a short window.
+    const isContent = fullContent || sectionId !== undefined || fields.some((f) => CONTENT_FIELDS.has(f));
+    return NextResponse.json(projected, {
+      headers: { "Cache-Control": isContent ? CONTENT_CACHE : METADATA_CACHE },
+    });
   } catch (err) {
     if (err instanceof MaterialSectionNotFoundError) return notFound();
     throw err;
@@ -168,6 +184,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ m
 
   const { error: deleteError } = await admin.from("materials").delete().eq("id", row.id);
   if (deleteError) return notFound();
+  invalidateMaterialStorage(row.slug);
 
   const objectPaths = [row.source_url, row.json_storage_path, row.cover_url]
     .filter((url): url is string => !!url)

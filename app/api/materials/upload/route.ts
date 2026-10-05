@@ -9,6 +9,7 @@ import { slugify } from "@/lib/book/epubParser";
 import { enrichMaterial } from "@/lib/materials/enrichMaterial";
 import { buildMaterialManifest, manifestStoragePath } from "@/lib/materials/manifest";
 import { ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes } from "@/lib/materials/uploadLimits";
+import { invalidateMaterialStorage } from "@/lib/materials/storageCache";
 import { isUploadMaterialType, thumbnailExtension, uploadObjectPaths } from "@/lib/materials/uploadPaths";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -145,6 +146,8 @@ export async function POST(request: Request) {
       upsert: true,
     });
     if (manifestUploadError) return reject("Could not upload the book manifest.");
+    // The slug may have belonged to a since-deleted book.
+    invalidateMaterialStorage(slug);
     uploadedPaths.push(manifestStoragePath(slug));
   } else if (materialType === "pdf") {
     pageCountEstimate = typeof body.pageCount === "number" && body.pageCount > 0 ? Math.round(body.pageCount) : null;

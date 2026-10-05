@@ -2,7 +2,7 @@ import { resolveStorageUrl } from "@/lib/storage/config";
 import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
 import { buildSectionsById } from "@/lib/reader/sections";
 import type { Database } from "@/lib/supabase/database.types";
-import { fetchMaterialManifest } from "./manifest";
+import { STORAGE_CACHE_SECONDS, fetchMaterialManifest, materialStorageTag } from "./manifest";
 import { parseGoogleMetaData, parseOpenLibraryMetaData } from "./providerMeta";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
@@ -35,9 +35,12 @@ const STORAGE_FIELDS = new Set(["narrators", "notes"]);
 
 export class MaterialSectionNotFoundError extends Error {}
 
-async function fetchBookFromStorage(jsonStoragePath: string | null): Promise<BookDocument> {
+async function fetchBookFromStorage(jsonStoragePath: string | null, slug: string): Promise<BookDocument> {
   if (!jsonStoragePath) throw new Error("Material has no json_storage_path (PDF materials have no BookDocument)");
-  const res = await fetch(resolveStorageUrl(jsonStoragePath));
+  // Next's data cache skips entries over 2MB, so big books still refetch.
+  const res = await fetch(resolveStorageUrl(jsonStoragePath), {
+    next: { revalidate: STORAGE_CACHE_SECONDS, tags: [materialStorageTag(slug)] },
+  });
   if (!res.ok) throw new Error(`Could not fetch book JSON at ${jsonStoragePath} (${res.status})`);
   const parsed = parseBookDocument(await res.json());
   if (!parsed.ok) throw new Error(`Invalid book JSON at ${jsonStoragePath}: ${parsed.error.message}`);
@@ -82,7 +85,7 @@ export async function projectMaterial(
 
   const needsSectionContent = fields.has("sections") && (!!opts.sectionId || !!opts.fullContent);
   const needsStorage = [...fields].some((f) => STORAGE_FIELDS.has(f)) || needsSectionContent;
-  const book = needsStorage ? await fetchBookFromStorage(row.json_storage_path) : null;
+  const book = needsStorage ? await fetchBookFromStorage(row.json_storage_path, row.slug) : null;
   const manifest = fields.has("spine") || (fields.has("sections") && !needsSectionContent)
     ? await fetchMaterialManifest(row.slug)
     : null;

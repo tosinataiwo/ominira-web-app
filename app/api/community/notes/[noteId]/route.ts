@@ -6,6 +6,7 @@ import { contentToColumns, hydrateNotes, type NoteRow, type PostKind } from "@/l
 import { enrichFeedItems } from "@/lib/community/feed";
 import { STORAGE_BUCKET, objectPathFromPublicUrl } from "@/lib/storage/config";
 import type { NoteContent } from "@/lib/api/types";
+import { invalidateMaterialStorage } from "@/lib/materials/storageCache";
 import type { Database } from "@/lib/supabase/database.types";
 
 /** One thread, in the same `FeedItem` shape the home feed ships — so
@@ -94,7 +95,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
   if (existing.material_id) {
     const { data: material } = await admin
       .from("materials")
-      .select("id, uploaded_by, source_url, json_storage_path, cover_url")
+      .select("id, slug, uploaded_by, source_url, json_storage_path, cover_url")
       .eq("id", existing.material_id)
       .maybeSingle();
     if (material && material.uploaded_by === reader.readerId) {
@@ -106,6 +107,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
         await admin.from("pending_materials").delete().eq("material_id", material.id);
         const { error: materialDeleteError } = await admin.from("materials").delete().eq("id", material.id);
         if (!materialDeleteError) {
+          invalidateMaterialStorage(material.slug);
           const objectPaths = [material.source_url, material.json_storage_path, material.cover_url]
             .filter((url): url is string => !!url)
             .map((url) => objectPathFromPublicUrl(STORAGE_BUCKET, url))
