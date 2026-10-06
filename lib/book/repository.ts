@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseBookDocument, type BookDocument } from "./schema";
-import { storagePublicUrl } from "@/lib/storage/config";
+import { readStorageText } from "@/lib/storage/filebase";
 
 const BOOKS_DIR = path.join(process.cwd(), "content", "books");
 const BOOKS_SOURCE = process.env.BOOKS_SOURCE ?? "local";
@@ -53,16 +53,17 @@ export async function getLocalBookDocument(slug: string): Promise<BookDocument> 
 
 /**
  * Reads and validates a book by slug. Source is local JSON fixtures or a
- * published Supabase Storage bucket, chosen by BOOKS_SOURCE — callers and
+ * published Filebase bucket, chosen by BOOKS_SOURCE — callers and
  * the return type are identical either way.
  */
 export async function getBookDocument(slug: string): Promise<BookDocument> {
   if (BOOKS_SOURCE !== "supabase") {
     return getLocalBookDocument(slug);
   }
-  const res = await fetch(storagePublicUrl(`books/${slug}.json`), { next: { revalidate: 300 } });
-  if (!res.ok) throw new BookNotFoundError(slug);
-  return parseRaw(slug, await res.text());
+  const raw = await readStorageText(`books/${slug}.json`).catch(() => {
+    throw new BookNotFoundError(slug);
+  });
+  return parseRaw(slug, raw);
 }
 
 /**
@@ -105,8 +106,7 @@ export async function listBooks(): Promise<BookDocument[]> {
   let slugs: string[];
   if (BOOKS_SOURCE === "supabase") {
     try {
-      const res = await fetch(storagePublicUrl("books/index.json"), { next: { revalidate: 300 } });
-      slugs = res.ok ? ((await res.json()) as string[]) : [];
+      slugs = JSON.parse(await readStorageText("books/index.json")) as string[];
     } catch {
       slugs = [];
     }

@@ -1,4 +1,4 @@
-import { resolveStorageUrl } from "@/lib/storage/config";
+import { readStorageText } from "@/lib/storage/filebase";
 import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
 
 /**
@@ -25,9 +25,7 @@ export async function loadBookDocuments(
     materials.map(async (material) => {
       if (!material.json_storage_path) return;
       try {
-        const res = await fetch(resolveStorageUrl(material.json_storage_path));
-        if (!res.ok) return;
-        const parsed = parseBookDocument(await res.json());
+        const parsed = parseBookDocument(JSON.parse(await readStorageText(material.json_storage_path)));
         if (parsed.ok) bookByMaterialId.set(material.id, parsed.data);
       } catch {
         // Storage hiccup — this material's items fall back to empty

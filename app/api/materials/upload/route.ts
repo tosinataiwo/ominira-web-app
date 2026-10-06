@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader, isAdminReader } from "@/lib/auth/session";
 import { unauthorized, validationError } from "@/lib/api/errors";
 import { bucketPublicUrl, STORAGE_BUCKET } from "@/lib/storage/config";
+import { deleteContentObjects, putContentObject } from "@/lib/storage/filebase";
 import { parseBookDocument } from "@/lib/book/schema";
 import { slugify } from "@/lib/book/epubParser";
 import { enrichMaterial } from "@/lib/materials/enrichMaterial";
@@ -72,8 +73,10 @@ export async function POST(request: Request) {
   const bucket = admin.storage.from(STORAGE_BUCKET);
   const paths = uploadObjectPaths(reader.readerId, uploadId, materialType, thumbnailExtension(body.thumbnailType));
   const uploadedPaths = [paths.source, paths.json, paths.thumbnail].filter((p): p is string => !!p);
+  let manifestKey: string | null = null;
   const reject = async (message: string, field?: string) => {
     await bucket.remove(uploadedPaths).catch(() => {});
+    if (manifestKey) await deleteContentObjects([manifestKey]).catch(() => {});
     return validationError(message, field);
   };
 
@@ -134,21 +137,22 @@ export async function POST(request: Request) {
     // moment a reader opens it — getMaterialDetail/projectMaterial both
     // require fetchMaterialManifest to succeed unconditionally.
     //
-    // `upsert: true` deliberately: this path is keyed by `slug` alone (not
-    // the uploadId prefix), so it's the one object a retry of the same title
-    // can genuinely collide with — `uniqueSlug` only guarantees this slug is
-    // free in the `materials` table, not in Storage, and an earlier failed
-    // attempt may have left this exact object behind with no row pointing at
-    // it. Safe to overwrite — nothing can be depending on an orphan's content.
+    // Written to Filebase, where fetchMaterialManifest reads it. Overwrites
+    // deliberately: this key is the slug alone (not the uploadId prefix), so
+    // it's the one object a retry of the same title can genuinely collide
+    // with — `uniqueSlug` only guarantees this slug is free in the
+    // `materials` table, not in storage, and an earlier failed attempt may
+    // have left this exact object behind with no row pointing at it. Safe to
+    // overwrite — nothing can be depending on an orphan's content.
     const manifest = buildMaterialManifest(validated.data, slug);
-    const { error: manifestUploadError } = await bucket.upload(manifestStoragePath(slug), JSON.stringify(manifest), {
-      contentType: "application/json",
-      upsert: true,
-    });
-    if (manifestUploadError) return reject("Could not upload the book manifest.");
+    try {
+      await putContentObject(manifestStoragePath(slug), JSON.stringify(manifest), "application/json");
+    } catch {
+      return reject("Could not upload the book manifest.");
+    }
     // The slug may have belonged to a since-deleted book.
     invalidateMaterialStorage(slug);
-    uploadedPaths.push(manifestStoragePath(slug));
+    manifestKey = manifestStoragePath(slug);
   } else if (materialType === "pdf") {
     pageCountEstimate = typeof body.pageCount === "number" && body.pageCount > 0 ? Math.round(body.pageCount) : null;
   }

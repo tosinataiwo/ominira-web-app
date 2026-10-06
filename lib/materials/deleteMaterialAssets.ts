@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { invalidateMaterialStorage } from "./storageCache";
 import { STORAGE_BUCKET } from "@/lib/storage/config";
+import { deleteContentObjects } from "@/lib/storage/filebase";
 
 /** Escapes a slug for use inside a RegExp — slugs are URL-safe already, but
  * this stays correct even if that ever changes. */
@@ -87,6 +88,18 @@ export async function deleteMaterialAssets(slug: string): Promise<{ removed: str
     const { data, error: removeError } = await admin.storage.from(STORAGE_BUCKET).remove(chunk);
     if (removeError) errors.push(`remove: ${removeError.message}`);
     for (const file of data ?? []) removed.push(file.name);
+  }
+
+  // The book's JSON and manifest also live in the Filebase bucket (the
+  // Supabase copies above go once the migration's delete step runs;
+  // removing them there is a no-op after that).
+  try {
+    const contentKeys = [`books/${slug}.json`, `books/${slug}-manifest.json`];
+    const failed = await deleteContentObjects(contentKeys);
+    if (failed.length) errors.push(`filebase remove: ${failed.join(", ")}`);
+    removed.push(...contentKeys.filter((key) => !failed.includes(key)).map((key) => `filebase:${key}`));
+  } catch (err) {
+    errors.push(`filebase: ${(err as Error).message}`);
   }
 
   return { removed, errors };

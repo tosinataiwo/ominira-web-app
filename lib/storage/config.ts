@@ -18,7 +18,7 @@ export function bucketPublicUrl(bucket: string, objectPath: string): string {
   return `${base}/storage/v1/object/public/${bucket}/${objectPath}`;
 }
 
-/** Public CDN URL for an object path inside the `library` bucket, e.g. "books/<slug>.json". */
+/** Public CDN URL for an object path inside the `library` bucket, e.g. "covers/<slug>.jpg". */
 export function storagePublicUrl(objectPath: string): string {
   return bucketPublicUrl(STORAGE_BUCKET, objectPath);
 }
@@ -35,11 +35,12 @@ export function objectPathFromPublicUrl(bucket: string, url: string): string | n
   return url.startsWith(prefix) ? url.slice(prefix.length) : null;
 }
 
-/** Resolves a `materials.json_storage_path`/`source_url` value to a fetchable
- * URL regardless of which shape it's stored in: editorial materials still
- * store a `library`-bucket-relative object path ("books/<slug>.json"),
- * reader uploads store a full URL (any bucket/provider) directly — see
- * reader-uploads-spec.md § 1. Already-full values pass through unchanged. */
+/** Resolves a `materials.source_url`/`article_html_storage_path` value to a
+ * fetchable URL: a `library`-bucket-relative object path, or a full URL
+ * (any bucket/provider), which passes through unchanged — see
+ * reader-uploads-spec.md § 1. Not for `json_storage_path`: its relative
+ * paths ("books/<slug>.json") live in the private Filebase bucket, read with
+ * readStorageText() (lib/storage/filebase.ts). */
 export function resolveStorageUrl(pathOrUrl: string): string {
   return /^https?:\/\//.test(pathOrUrl) ? pathOrUrl : storagePublicUrl(pathOrUrl);
 }

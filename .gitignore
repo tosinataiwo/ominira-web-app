@@ -86,3 +86,6 @@ ingestion-pipeline/
 ui-mockups/
 
 remotion/
+# Supabase -> Filebase migration state: manifest, local backups of every
+# moved object, materials backups (scripts/migrate-storage-to-filebase.ts)
+/storage-migration/

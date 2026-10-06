@@ -18,6 +18,7 @@
     "metrics:verify": "bun run scripts/verify-dashboard-metrics.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
     "@embedpdf/core": "2.15.1",
     "@embedpdf/engines": "2.15.1",
     "@embedpdf/fonts-arabic": "1.0.0",

@@ -6,7 +6,7 @@ import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { decodeCursor, encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor";
 import { hydrateNotes, visibleToFilter, type NoteRow } from "@/lib/community/notes";
 import { resolveExcerpt } from "@/lib/community/excerpt";
-import { resolveStorageUrl } from "@/lib/storage/config";
+import { readStorageText } from "@/lib/storage/filebase";
 import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
 import { buildPassageIndex } from "@/lib/reader/sections";
 import type { AnnotationRange } from "@/lib/api/types";
@@ -48,9 +48,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
   // enrichment below rather than fetched twice.
   let book: BookDocument | undefined;
   if ((sectionId || withExcerpts) && material.json_storage_path) {
-    const res = await fetch(resolveStorageUrl(material.json_storage_path));
-    if (res.ok) {
-      const parsed = parseBookDocument(await res.json());
+    const text = await readStorageText(material.json_storage_path).catch(() => null);
+    if (text) {
+      const parsed = parseBookDocument(JSON.parse(text));
       if (parsed.ok) book = parsed.data;
     }
   }
