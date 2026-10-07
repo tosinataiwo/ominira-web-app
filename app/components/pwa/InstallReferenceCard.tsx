@@ -18,19 +18,19 @@ export const IOS_INSTALL_STEPS: InstallStep[] = [
   {
     label: "Tap the Share icon",
     screenshot:
-      "https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/pwa-1.png?token=eyJraWQiOiJhYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuL3B3YS0xLnBuZyIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3ODg0MzU2NjIsImV4cCI6MTgxOTk3MTY2Mn0.0szORKVjDSRpibLSF7w--dMlylOjJQ1vx1_hT64tN48",
+      "https://zpkykgmtqzaglxbrwzah.supabase.co/storage/v1/object/public/public-cdn/pwa-1.png",
     placeholder: "Screenshot: Safari toolbar, Share icon circled",
   },
   {
     label: "Scroll down, tap “Add to Home Screen”",
     screenshot:
-      "https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/pwa-2.png?token=eyJraWQiOiJhYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuL3B3YS0yLnBuZyIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3ODg0MzU2ODUsImV4cCI6MTgxOTk3MTY4NX0.JK1lJpE0Auo-A7rPOwT7mVR-BjVmiuTq_vQppsvmDhk",
+      "https://zpkykgmtqzaglxbrwzah.supabase.co/storage/v1/object/public/public-cdn/pwa-2.png",
     placeholder: "Screenshot: Share sheet, Add to Home Screen row highlighted",
   },
   {
     label: "Tap “Add” in the top right",
     screenshot:
-      "https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/pwa-3.png?token=eyJraWQiOiJhYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuL3B3YS0zLnBuZyIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3ODg0MzU4MDAsImV4cCI6MTgxOTk3MTgwMH0.3UDCmUhpddLgoCq2zdCcUAZTdBeSnG-90ldJCFlTLQQ",
+      "https://zpkykgmtqzaglxbrwzah.supabase.co/storage/v1/object/public/public-cdn/pwa-3.png",
     placeholder: "Screenshot: confirmation dialog, Add button circled",
   },
 ];

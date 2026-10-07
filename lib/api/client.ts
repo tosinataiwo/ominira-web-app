@@ -54,13 +54,13 @@ async function refreshSession(refreshToken: string): Promise<RefreshOutcome> {
  * (revoked, or truly stale) clears the session outright, same as an
  * explicit log-out — there's nothing left worth retrying.
  */
-export async function ensureFreshSession(): Promise<string | undefined> {
+export async function ensureFreshSession({ force = false } = {}): Promise<string | undefined> {
   const session = useSessionStore.getState().session;
   if (!session) return undefined;
 
   const expiresAtMs = Date.parse(session.expiresAt);
   const stillFresh = !Number.isNaN(expiresAtMs) && expiresAtMs - Date.now() > REFRESH_MARGIN_MS;
-  if (stillFresh) return session.accessToken;
+  if (stillFresh && !force) return session.accessToken;
 
   if (!refreshPromise) {
     refreshPromise = refreshSession(session.refreshToken).finally(() => {
@@ -129,17 +129,25 @@ type ApiFetchOptions = {
  */
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { method, json, body, headers } = options;
-  const accessToken = await ensureFreshSession();
+  const send = (accessToken: string | undefined) =>
+    fetch(`/api${path}`, {
+      method: method ?? (json !== undefined || body !== undefined ? "POST" : "GET"),
+      headers: {
+        ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...headers,
+      },
+      body: json !== undefined ? JSON.stringify(json) : body,
+    });
 
-  const res = await fetch(`/api${path}`, {
-    method: method ?? (json !== undefined || body !== undefined ? "POST" : "GET"),
-    headers: {
-      ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers,
-    },
-    body: json !== undefined ? JSON.stringify(json) : body,
-  });
+  const accessToken = await ensureFreshSession();
+  let res = await send(accessToken);
+  // An access token can be rejected before it expires (e.g. one signed by
+  // the previous Supabase project): refresh once and retry.
+  if (res.status === 401 && accessToken) {
+    const refreshed = await ensureFreshSession({ force: true });
+    if (refreshed && refreshed !== accessToken) res = await send(refreshed);
+  }
 
   if (res.status === 204) return undefined as T;
 

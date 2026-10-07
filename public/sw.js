@@ -14,10 +14,12 @@ const CACHE_NAME = "ominira-shell-v12";
 //    needs to actually run.
 //  - media: in-book images from Storage.
 const DOCUMENT_CACHE_NAME = "ominira-documents-v1";
-const CONTENT_CACHE_NAME = "ominira-content-v1";
+// content and media v2: Storage moved to a new Supabase project, so book text
+// cached before then names the old host (supabase-migration.md).
+const CONTENT_CACHE_NAME = "ominira-content-v2";
 const PAGE_CACHE_NAME = "ominira-pages-v1";
 const STATIC_CACHE_NAME = "ominira-static-v1";
-const MEDIA_CACHE_NAME = "ominira-media-v1";
+const MEDIA_CACHE_NAME = "ominira-media-v2";
 const KEPT_CACHES = [CACHE_NAME, DOCUMENT_CACHE_NAME, CONTENT_CACHE_NAME, PAGE_CACHE_NAME, STATIC_CACHE_NAME, MEDIA_CACHE_NAME];
 // Entry caps. Pages and media are trimmed least recently used first (a hit
 // re-stores the entry — see touch()), so a book reread daily outlives one

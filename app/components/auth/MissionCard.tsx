@@ -59,7 +59,7 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
             wrapping into a narrow column. */}
         <div className="flex flex-none flex-row items-center gap-4 sm:max-w-80">
           <img
-            src="https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/rodney.jpeg?token=eyJraWQiOiJhYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuL3JvZG5leS5qcGVnIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4ODYwMjI3NCwiZXhwIjoxODIwMTM4Mjc0fQ.Q5o-dtvhOaGpx-Q5INjtyGhX6W1BI_o38M4kabywyZw"
+            src="https://zpkykgmtqzaglxbrwzah.supabase.co/storage/v1/object/public/public-cdn/rodney.jpeg"
             alt="Walter Rodney"
             className="h-20 w-20 flex-none object-cover object-[48%_20%] sm:h-24 sm:w-24"
           />

@@ -106,7 +106,9 @@ export async function fetchStorageText(pathOrUrl: string): Promise<string> {
  * read. */
 export async function readStorageText(pathOrUrl: string): Promise<string> {
   const options = { revalidate: STORAGE_CACHE_SECONDS, tags: isUrl(pathOrUrl) ? [] : [storageCacheTag(pathOrUrl)] };
-  const namespace = isUrl(pathOrUrl) ? "url" : `filebase:${filebaseBucket()}`;
+  // The version drops every cached Filebase object at once; bump it when they're
+  // all rewritten (v2: image URLs moved to the new Supabase project).
+  const namespace = isUrl(pathOrUrl) ? "url" : `filebase:${filebaseBucket()}:v2`;
   const cached = <T>(parts: string[], read: () => Promise<T>) => unstable_cache(read, ["storage", namespace, pathOrUrl, ...parts], options)();
   const toBase64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 

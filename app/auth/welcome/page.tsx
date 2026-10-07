@@ -46,12 +46,12 @@ export default function WelcomePage() {
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <h1 className="font-serif text-4xl font-semibold text-[var(--reader-text)]">You&rsquo;re in, Comrade.</h1>
           <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-[var(--reader-text-muted)]">
-            Every reader deepens the well of our collective consciousness. The movement grows with you.
+            Every comrade deepens the well of our collective consciousness. The movement grows with you.
           </p>
           <AuthButton fullWidth={false} onClick={enter} disabled={completeOnboarding.isPending} className="mt-7 px-10">
             {completeOnboarding.isPending ? "Entering…" : "Welcome, Comrade"}
           </AuthButton>
-          <p className="mt-4 text-sm text-[var(--reader-text-muted)]">You&rsquo;re in good company.</p>
+          <p className="mt-4 text-sm text-[var(--reader-text-muted)]">You&rsquo;re in revolutionary company.</p>
           <SunriseMark theme="light" book className="mt-10 w-full max-w-md" />
         </div>
       </div>
