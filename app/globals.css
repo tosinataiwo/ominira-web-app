@@ -390,6 +390,45 @@ body {
   }
 }
 
+/* A room reaction (app/components/room/Reactions.tsx): rises and fades over
+   ~3 s (reactions.ts RISE_MS), staggered by inline animation-delay. With
+   reduced motion it appears and fades in place. */
+@keyframes room-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.8);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-110px);
+  }
+}
+@keyframes room-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  70% {
+    opacity: 1;
+  }
+}
+.room-rise {
+  animation: room-rise 3s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .room-rise {
+    animation-name: room-fade;
+  }
+}
+
 /* The social rail's floating surfaces (NotesFeedFab.tsx) — frosted over the
    page rather than a flat card on top of it, so the rail reads as a layer of
    the reading surface, not chrome bolted onto it. */

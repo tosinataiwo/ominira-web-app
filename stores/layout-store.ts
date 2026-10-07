@@ -29,6 +29,10 @@ type LayoutState = {
    * the same trick bottomNavHeight plays at the other edge. */
   topBarHeight: number;
   setTopBarHeight: (px: number) => void;
+  /** RoomMiniPlayer's rendered height while in a room (0 otherwise); it
+   * stacks above NowPlayingBar. Read through useDockedHeight. */
+  roomPlayerHeight: number;
+  setRoomPlayerHeight: (px: number) => void;
 };
 
 export const useLayoutStore = create<LayoutState>((set) => ({
@@ -38,4 +42,6 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setReaderPanelOpen: (readerPanelOpen) => set({ readerPanelOpen }),
   topBarHeight: 0,
   setTopBarHeight: (topBarHeight) => set({ topBarHeight }),
+  roomPlayerHeight: 0,
+  setRoomPlayerHeight: (roomPlayerHeight) => set({ roomPlayerHeight }),
 }));

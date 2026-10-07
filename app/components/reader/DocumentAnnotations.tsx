@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Highlighter, MessageCircle, Trash2 } from "lucide-react";
+import { Copy, Highlighter, MessageCircle, MessageSquareQuote, Trash2 } from "lucide-react";
 import type { SelectionSurface } from "@/lib/annotations/surface";
 import { useTextSelection } from "@/lib/annotations/useTextSelection";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
 import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
+import { useShareToRoom } from "@/lib/room/sharePassage";
 import { useScrollChrome } from "@/lib/reader/useScrollChrome";
 import { PENDING_ANNOTATION_ID, useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { useReaderStore } from "@/stores/reader-store";
@@ -93,6 +94,7 @@ export function useDocumentAnnotations({
   } = annotations;
 
   const feed = useBookAnnotationFeed({ materialId, locate });
+  const shareToRoom = useShareToRoom(materialId);
   const scrollChrome = useScrollChrome(scrollEl);
   const { close: closeFeed } = feed;
   const onMarkClick = useCallback(
@@ -141,6 +143,25 @@ export function useDocumentAnnotations({
               { key: "highlight", icon: <Highlighter size={iconSize} />, label: "Highlight", onClick: highlightSelection },
               { key: "note", icon: <MessageCircle size={iconSize} />, label: "Note", onClick: noteFromSelection },
               { key: "copy", icon: <Copy size={iconSize} />, label: copied ? "Copied ✓" : "Copy", onClick: copySelection },
+              ...(shareToRoom
+                ? [
+                    {
+                      key: "room",
+                      icon: <MessageSquareQuote size={iconSize} />,
+                      label: "Share to room",
+                      onClick: () => {
+                        shareToRoom({
+                          ranges: selection.ranges,
+                          quote: quoteForRanges(selection.ranges, getPassageText),
+                          label: locate(selection.ranges[0].passageId)?.label ?? "",
+                        });
+                        closeNotesPanel();
+                        feed.openChat();
+                        dismissSelection();
+                      },
+                    },
+                  ]
+                : []),
               ...(hasExistingAnnotation
                 ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: deleteSelection, danger: true }]
                 : []),

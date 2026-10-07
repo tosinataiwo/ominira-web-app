@@ -4,7 +4,7 @@ import { MATERIAL_DETAIL_COLUMNS } from "./columns";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_RE =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Resolves a materialId path segment against either `id` (UUID) or `slug`

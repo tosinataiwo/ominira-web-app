@@ -179,7 +179,7 @@ export default function PanelShell({
             <div className="min-w-0">{tabs}</div>
             <div className="flex items-center gap-3.5 flex-none pb-3">
               {headerMenu}
-                <button onClick={onClose} className="flex bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0">
+                <button onClick={onClose} aria-label="Close" className="flex bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0">
                   <X size={16} />
                 </button>
             </div>
@@ -199,7 +199,7 @@ export default function PanelShell({
             </div>
             <div className="flex items-center gap-3.5 flex-none">
               {headerMenu}
-                <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)]">
+                <button onClick={onClose} aria-label="Close" className="bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)]">
                   <X size={16} />
                 </button>
             </div>

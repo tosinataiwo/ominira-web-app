@@ -12,7 +12,7 @@ import { enrichMaterial } from "@/lib/materials/enrichMaterial";
 import { buildMaterialManifest, manifestStoragePath } from "@/lib/materials/manifest";
 import { ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes } from "@/lib/materials/uploadLimits";
 import { invalidateMaterialStorage } from "@/lib/materials/storageCache";
-import { isUploadMaterialType, thumbnailExtension, uploadObjectPaths } from "@/lib/materials/uploadPaths";
+import { MAX_UPLOAD_IMAGES, isUploadMaterialType, thumbnailExtension, uploadObjectPaths } from "@/lib/materials/uploadPaths";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -78,6 +78,10 @@ export async function POST(request: Request) {
   let manifestKey: string | null = null;
   const reject = async (message: string, field?: string) => {
     await bucket.remove(uploadedPaths).catch(() => {});
+    if (paths.images) {
+      const { data: images } = await bucket.list(paths.images, { limit: MAX_UPLOAD_IMAGES });
+      if (images?.length) await bucket.remove(images.map((o) => `${paths.images}/${o.name}`)).catch(() => {});
+    }
     if (manifestKey) await deleteContentObjects([manifestKey]).catch(() => {});
     return validationError(message, field);
   };

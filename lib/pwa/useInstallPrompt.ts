@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { isIOSDevice } from "@/lib/pwa/platform";
 import { useInstallBannerStore } from "@/stores/install-banner-store";
 
 type BeforeInstallPromptEvent = Event & {
@@ -9,15 +10,6 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 export type InstallPlatform = "ios" | "other";
-
-function isIOSDevice(): boolean {
-  const ua = navigator.userAgent;
-  // iPadOS 13+ identifies itself as "MacIntel" in navigator.platform (it
-  // dropped the "iPad" UA token to get desktop sites by default) — the
-  // touch-points check is what actually distinguishes it from a real Mac.
-  const isIPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-  return /iPad|iPhone|iPod/.test(ua) || isIPadOS;
-}
 
 function detectPlatform(): InstallPlatform {
   return isIOSDevice() ? "ios" : "other";

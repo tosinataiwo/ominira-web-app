@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import AppSidebar from "./AppSidebar";
 import AppBottomNav from "./AppBottomNav";
-import { useAudioStore } from "@/stores/audio-store";
+import { useDockedHeight } from "@/app/components/useBottomDock";
 import { useLayoutStore } from "@/stores/layout-store";
 
 /**
@@ -20,8 +20,7 @@ import { useLayoutStore } from "@/stores/layout-store";
  * summed, rather than a guessed constant.
  */
 export default function AppShell({ children }: { children: ReactNode }) {
-  const anyPlayerActive = useAudioStore((s) => s.book !== null);
-  const playerHeight = useAudioStore((s) => s.playerHeight);
+  const dockedHeight = useDockedHeight();
   const bottomNavHeight = useLayoutStore((s) => s.bottomNavHeight);
   const topBarHeight = useLayoutStore((s) => s.topBarHeight);
   return (
@@ -32,7 +31,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         className="shell:pl-[var(--app-sidebar-w)]"
         style={{
           paddingTop: `calc(env(safe-area-inset-top) + ${topBarHeight}px)`,
-          paddingBottom: bottomNavHeight + (anyPlayerActive ? playerHeight : 0),
+          paddingBottom: bottomNavHeight + dockedHeight,
         }}
       >
         <main className="mx-auto max-w-5xl px-5 py-2 shell:px-10">{children}</main>

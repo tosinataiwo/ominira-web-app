@@ -125,7 +125,7 @@ export function useArticleProgress({ materialId, urlLocator }: { materialId: str
   }, []);
 
   const getScrollElement = useCallback(() => scrollRef.current, []);
-  const { getPositionNow } = useDocumentProgress({
+  const { getPositionNow, resumeApplied } = useDocumentProgress({
     materialId,
     kind: "block",
     urlLocator,
@@ -138,6 +138,7 @@ export function useArticleProgress({ materialId, urlLocator }: { materialId: str
 
   // The refs are returned as callbacks: attaching is what tells this hook the
   // article exists, which a plain ref object couldn't signal. `getPositionNow`
-  // is for DocumentEndPanel — see useDocumentProgress.
-  return { scrollRef: setScrollEl, contentRef: setContentEl, scrollElement, getPositionNow };
+  // is for DocumentEndPanel — see useDocumentProgress. `resumeApplied`: the
+  // reader has landed (a live room starts reading the position from then).
+  return { scrollRef: setScrollEl, contentRef: setContentEl, scrollElement, getPositionNow, resumeApplied };
 }

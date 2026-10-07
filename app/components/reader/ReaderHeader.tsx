@@ -6,8 +6,12 @@ import type { Section } from "@/lib/book/schema";
 import { useReaderStore } from "@/stores/reader-store";
 import Tooltip from "./Tooltip";
 import ChapterPill from "./ChapterPill";
+import StartRoomButton from "@/app/components/room/StartRoomButton";
 
 type Props = {
+  /** The material on screen; drives "Start a room" (reading-room-spec.md),
+   * shown only where a room can start. */
+  materialId: string;
   visible?: boolean;
   topBarHeightPx: number;
   railInsetPx: number;
@@ -99,6 +103,7 @@ const iconButtonClass =
  * of their own yet).
  */
 export default function ReaderHeader({
+  materialId,
   visible = true,
   topBarHeightPx,
   railInsetPx,
@@ -190,6 +195,8 @@ export default function ReaderHeader({
         )}
 
         {children}
+
+        <StartRoomButton materialId={materialId} className={iconButtonClass} />
 
         {canListen && !isListen && onListen && (
           <Tooltip label="Listen to this book" side="bottom">

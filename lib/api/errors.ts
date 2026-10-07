@@ -3,7 +3,15 @@ import { NextResponse } from "next/server";
 // The one error shape every non-2xx response uses (api-spec.md's Conventions).
 // `field` is present only when an error is attributable to one specific form
 // input — the client renders those inline, never as a redirect.
-export type ApiErrorCode = "unauthorized" | "forbidden" | "not_found" | "validation_error" | "conflict";
+export type ApiErrorCode =
+  | "unauthorized"
+  | "forbidden"
+  | "not_found"
+  | "validation_error"
+  | "conflict"
+  // Reading Room join refusals the client renders as states (spec §10).
+  | "room_full"
+  | "room_ended";
 
 const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   unauthorized: 401,
@@ -11,6 +19,8 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   not_found: 404,
   validation_error: 400,
   conflict: 409,
+  room_full: 409,
+  room_ended: 410,
 };
 
 export function apiError(code: ApiErrorCode, message: string, field?: string) {

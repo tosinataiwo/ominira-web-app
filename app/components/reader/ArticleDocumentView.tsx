@@ -51,11 +51,21 @@ export default function ArticleDocumentView({
 }) {
   const theme = useReaderStore((s) => s.theme);
   const typography = useArticleTypographyStyle();
-  const { scrollRef, contentRef, scrollElement, getPositionNow } = useArticleProgress({ materialId, urlLocator });
+  const { scrollRef, contentRef, scrollElement, getPositionNow, resumeApplied } = useArticleProgress({
+    materialId,
+    urlLocator,
+  });
   // Arrows/PageUp/PageDown/Space/Home/End scroll the document on desktop — see
   // the hook; with no pages to turn, ←/→ move by a screenful.
   useDocumentKeyboard({ scrollElement });
-  const { attachContent, chrome, highlights } = useArticleAnnotations({ materialId, title, contentRef, scrollElement, typography });
+  const { attachContent, chrome, highlights } = useArticleAnnotations({
+    materialId,
+    title,
+    contentRef,
+    scrollElement,
+    typography,
+    ready: resumeApplied,
+  });
   // One markup object per article: React re-sets innerHTML whenever it gets a
   // new `{ __html }` object, which would replace the article (and the
   // paragraph under a reader's finger) on every render.
@@ -68,6 +78,7 @@ export default function ArticleDocumentView({
       style={{ background: "var(--reader-bg)" }}
     >
       <ReaderHeader
+        materialId={materialId}
         topBarHeightPx={TOP_BAR_HEIGHT_PX}
         railInsetPx={RAIL_INSET_PX}
         onClose={onClose}

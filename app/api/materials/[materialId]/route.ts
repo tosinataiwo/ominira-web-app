@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { MaterialSectionNotFoundError, projectMaterial } from "@/lib/materials/projection";
 import { STORAGE_BUCKET, objectPathFromPublicUrl } from "@/lib/storage/config";
+import { MAX_UPLOAD_IMAGES, uploadImagesFolder } from "@/lib/materials/uploadPaths";
 import { invalidateMaterialStorage } from "@/lib/materials/storageCache";
 
 const CONTENT_FIELDS = new Set(["sections", "narrators", "notes"]);
@@ -190,7 +191,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ m
     .filter((url): url is string => !!url)
     .map((url) => objectPathFromPublicUrl(STORAGE_BUCKET, url))
     .filter((path): path is string => !!path);
-  if (objectPaths.length > 0) await admin.storage.from(STORAGE_BUCKET).remove(objectPaths);
+  const bucket = admin.storage.from(STORAGE_BUCKET);
+  // A reader-uploaded EPUB's body images sit in a folder beside its JSON.
+  const jsonPath = row.json_storage_path ? objectPathFromPublicUrl(STORAGE_BUCKET, row.json_storage_path) : null;
+  if (jsonPath?.startsWith("uploads/")) {
+    const folder = uploadImagesFolder(jsonPath);
+    const { data: images } = await bucket.list(folder, { limit: MAX_UPLOAD_IMAGES });
+    objectPaths.push(...(images ?? []).map((o) => `${folder}/${o.name}`));
+  }
+  if (objectPaths.length > 0) await bucket.remove(objectPaths);
 
   return NextResponse.json({ deleted: true });
 }

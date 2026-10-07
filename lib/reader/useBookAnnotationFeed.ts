@@ -14,8 +14,9 @@ import { buildAnnotationFeedEntries, type FeedEntry, type FeedLocator } from "./
  * third "all" option needed. Purely a display filter — totals below are
  * always computed from the full, unfiltered set, so the header badge/
  * subtitle never appears to shrink just because the reader narrowed their
- * own view. */
-export type AnnotationFeedFilter = "notes" | "highlights";
+ * own view. "chat" is the live room's chat (app/components/room/RoomChat),
+ * offered only while you're in the room on this book; no feed items. */
+export type AnnotationFeedFilter = "notes" | "highlights" | "chat";
 
 /** One row the panel actually renders — a highlighted passage's discussion
  * (with its own chapter/section `label` for context — see FeedEntry) or a
@@ -81,6 +82,7 @@ export function useBookAnnotationFeed({
   const flatEntries: FeedEntry[] = useMemo(() => buildAnnotationFeedEntries(allAnnotations, locate), [allAnnotations, locate]);
 
   const items: FeedItem[] = useMemo(() => {
+    if (filter === "chat") return [];
     const byAuthor = (n: Note) => n.author.readerId === authorId;
     const highlightItems: FeedItem[] = flatEntries
       .filter((e) => (filter === "notes" ? e.annotation.notes.length > 0 : e.annotation.notes.length === 0))
@@ -183,6 +185,12 @@ export function useBookAnnotationFeed({
     if (author) setFilter("notes");
     setOpen(true);
   }, []);
+  /** Opens the feed on the room chat. */
+  const openChat = useCallback(() => {
+    setAuthorId(null);
+    setFilter("chat");
+    setOpen(true);
+  }, []);
   const close = useCallback(() => {
     setOpen(false);
     setAuthorId(null);
@@ -210,6 +218,7 @@ export function useBookAnnotationFeed({
     focusedAuthor,
     clearAuthor,
     openFeed,
+    openChat,
     close,
   };
 }

@@ -6,6 +6,7 @@ import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 import TouchActiveState from "./components/pwa/TouchActiveState";
 import AppSplashScreen from "./components/pwa/AppSplashScreen";
 import NowPlayingBar from "./components/NowPlayingBar";
+import RoomLayer from "./components/room/RoomLayer";
 import Toaster from "./components/shared/Toaster";
 import ThemeProvider from "./components/ThemeProvider";
 import QueryProvider from "./components/QueryProvider";
@@ -122,6 +123,7 @@ export default function RootLayout({
           <TouchActiveState />
           <NarrationEngine />
           <NowPlayingBar />
+          <RoomLayer />
           <Toaster />
           {/* `mode` is explicit (rather than relying on the "auto" default)
            * so a local `bun run dev` never reports as production even if

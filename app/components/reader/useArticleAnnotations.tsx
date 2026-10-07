@@ -5,6 +5,8 @@ import { createDomSurface, indexedBlockId, indexOfBlockId } from "@/lib/annotati
 import type { FeedLocation, FeedLocator } from "@/lib/reader/annotationFeed";
 import { articleBlocks } from "@/lib/reader/useArticleProgress";
 import type { useArticleTypographyStyle } from "@/lib/reader/useArticleTypographyStyle";
+import { articleView } from "@/lib/room/view";
+import { useRoomView } from "@/lib/room/useRoomView";
 import { DomHighlights, useDocumentAnnotations } from "./DocumentAnnotations";
 
 /** The article's scroll container: positioned and its own stacking context
@@ -30,6 +32,7 @@ export function useArticleAnnotations({
   contentRef,
   scrollElement,
   typography,
+  ready,
 }: {
   materialId: string;
   /** Labels the notes feed's run for text before the first heading. */
@@ -38,6 +41,8 @@ export function useArticleAnnotations({
   contentRef: (el: HTMLDivElement | null) => void;
   scrollElement: HTMLDivElement | null;
   typography: ReturnType<typeof useArticleTypographyStyle>;
+  /** The reader has landed (useArticleProgress's resumeApplied). */
+  ready: boolean;
 }) {
   const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
   const attachContent = useCallback(
@@ -91,6 +96,16 @@ export function useArticleAnnotations({
     locate,
     jumpToBlock,
   });
+
+  // The article as a live room sees it (lib/room/view.ts).
+  const roomView = useMemo(
+    () =>
+      ready && scrollElement && contentEl
+        ? articleView({ materialId, root: scrollElement, blocks: () => articleBlocks(contentEl), surface: () => surface })
+        : null,
+    [ready, scrollElement, contentEl, materialId, surface]
+  );
+  useRoomView(roomView, annotations.selection?.ranges ?? null);
 
   const highlights = (
     <DomHighlights

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "bun test lib",
     "schema:generate": "bun run scripts/generate-schema.ts",
     "publish:book": "bun run scripts/publish-book.ts",
     "ingest:mae-principles": "bun run scripts/ingest-mae-principles.ts",
@@ -15,7 +16,11 @@
     "materials:cover-src": "bun run scripts/generate-material-cover-src.ts",
     "materials:google": "bun run scripts/generate-material-google-metadata.ts",
     "materials:openlibrary": "bun run scripts/generate-material-openlibrary-metadata.ts",
-    "metrics:verify": "bun run scripts/verify-dashboard-metrics.ts"
+    "metrics:verify": "bun run scripts/verify-dashboard-metrics.ts",
+    "rooms:verify": "bun run scripts/verify-rooms.ts",
+    "rooms:e2e": "bun run scripts/room-e2e.ts",
+    "rooms:follow": "bun run scripts/room-follow-e2e.ts && bun run scripts/room-follow-formats-e2e.ts",
+    "rooms:chat": "bun run scripts/room-chat-e2e.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
@@ -76,6 +81,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "json-schema-to-zod": "^2.8.1",
+    "playwright-core": "1.43.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

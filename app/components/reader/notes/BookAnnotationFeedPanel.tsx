@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import NoResults from "@/app/components/shared/NoResults";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
@@ -11,10 +12,18 @@ import type { Note } from "@/lib/api/types";
 import { useCreateNote } from "@/lib/community/useNoteMutations";
 import UnderlineTabs from "../../UnderlineTabs";
 import PanelShell from "./PanelShell";
+import LiveChip from "@/app/components/room/LiveChip";
 import FeedHighlightThread from "./FeedHighlightThread";
 import GeneralNoteThread from "./GeneralNoteThread";
 import NoteComposer from "./NoteComposer";
 import { notesLabel } from "../ReaderPresence";
+import { roomChatUnread, useRoomStore } from "@/stores/room-store";
+
+// The room's chat tab, loaded only while you're in the room on this book.
+const RoomChatList = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatList), { ssr: false });
+const RoomChatComposer = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatComposer), {
+  ssr: false,
+});
 
 // Same two-tab split as book details' own Table of contents/Community notes
 // switch (UnderlineTabs), just this panel's own two views — every entry is
@@ -159,6 +168,44 @@ export default function BookAnnotationFeedPanel({
   onClearAuthor: () => void;
 }) {
   const createNote = useCreateNote(materialId);
+  // Room chat sits beside the two tabs while you're in the room on this
+  // book, with its unread count (spec §3.1); leaving the room leaves it.
+  const chatUnread = useRoomStore((s) => roomChatUnread(s, materialId));
+  const inRoom = chatUnread !== null;
+  const onChat = filter === "chat" && inRoom;
+  useEffect(() => {
+    if (filter === "chat" && !inRoom) onFilterChange("notes");
+  }, [filter, inRoom, onFilterChange]);
+  const tabOptions = inRoom
+    ? [
+        ...FILTER_OPTIONS,
+        {
+          value: "chat" as const,
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+              Room chat
+              {chatUnread > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] leading-none tabular-nums text-white">
+                  {chatUnread > 99 ? "99+" : chatUnread}
+                </span>
+              )}
+            </span>
+          ),
+        },
+      ]
+    : FILTER_OPTIONS;
+  const tabs = (
+    <UnderlineTabs
+      bare
+      options={tabOptions}
+      value={filter}
+      onChange={(next) => {
+        onClearAuthor();
+        onFilterChange(next as AnnotationFeedFilter);
+      }}
+    />
+  );
   const [generalComposerError, setGeneralComposerError] = useState<string | null>(null);
   const runs = useMemo(() => groupFeedItemsByCategory(items), [items]);
   // Positioning: fires once per "panel just opened" but also waits for items
@@ -241,117 +288,123 @@ export default function BookAnnotationFeedPanel({
       // background" band sitting above the footer composer.
       bodyClassName="om-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5"
       footer={
-        // Bottom-docked and independent of `filter` — a general, book-level
-        // thought isn't specific to a passage or a selection, so it stays
-        // reachable the same way regardless of which tab the reader's
-        // browsing (highlights included), the same way a chat app's own
-        // message input never disappears depending on which channel view
-        // you're scrolled through.
-        <div className="flex flex-col gap-2">
-          <NoteComposer
-            initialText=""
-            placeholder="Add a note"
-            startCollapsed
-            showMemberPrompt
-            action="note"
-            draftKey={`book-${materialId}`}
-            onSave={(content, visibility) => {
-              setGeneralComposerError(null);
-              createNote.mutate(
-                { ranges: [], content, visibility },
-                { onError: () => setGeneralComposerError("Couldn't save your note — check your connection and try again.") }
-              );
-            }}
-          />
-          {generalComposerError && (
-            <p className="m-0 text-[11px] text-[var(--reader-text-muted)]">{generalComposerError}</p>
-          )}
-        </div>
+        onChat ? (
+          <RoomChatComposer materialId={materialId} />
+        ) : (
+          // Bottom-docked and independent of `filter` — a general, book-level
+          // thought isn't specific to a passage or a selection, so it stays
+          // reachable the same way regardless of which tab the reader's
+          // browsing (highlights included), the same way a chat app's own
+          // message input never disappears depending on which channel view
+          // you're scrolled through.
+          <div className="flex flex-col gap-2">
+            <NoteComposer
+              initialText=""
+              placeholder="Add a note"
+              startCollapsed
+              showMemberPrompt
+              action="note"
+              draftKey={`book-${materialId}`}
+              onSave={(content, visibility) => {
+                setGeneralComposerError(null);
+                createNote.mutate(
+                  { ranges: [], content, visibility },
+                  { onError: () => setGeneralComposerError("Couldn't save your note — check your connection and try again.") }
+                );
+              }}
+            />
+            {generalComposerError && (
+              <p className="m-0 text-[11px] text-[var(--reader-text-muted)]">{generalComposerError}</p>
+            )}
+          </div>
+        )
       }
+      headerMenu={<LiveChip materialId={materialId} />}
       // No "Notes & Highlights" title — the tabs already say what the panel
-      // holds, so they are the header, sharing its line with Close.
-      tabs={
-        <UnderlineTabs
-          bare
-          options={FILTER_OPTIONS}
-          value={filter}
-          onChange={(next) => {
-            onClearAuthor();
-            onFilterChange(next as AnnotationFeedFilter);
-          }}
-        />
-      }
+      // holds, so they are the header, sharing its line with Close. In the
+      // room there are three tabs and the Live chip, too many for one line:
+      // "Notes" and the chip head the panel, the tabs get their own row
+      // (spec §3.1).
+      title={inRoom ? "Notes" : undefined}
+      tabs={inRoom ? undefined : tabs}
+      subheader={inRoom ? <div className="px-5 pt-2.5">{tabs}</div> : undefined}
     >
-      {focusedAuthor && (
-        <div
-          ref={listTopRef}
-          className="reader-menu-in mt-3 flex items-center gap-2.5 rounded-full bg-[color-mix(in_srgb,var(--reader-accent)_10%,transparent)] py-1 pl-1 pr-1.5"
-        >
-          <ReaderAvatar pseudonym={focusedAuthor.author.pseudonym} avatar={focusedAuthor.author.avatar} size={26} />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--reader-text-muted)]">
-            <span className="font-semibold text-[var(--reader-text)]">{comradeName(focusedAuthor.author.pseudonym)}</span>
-            {" · "}
-            {notesLabel(focusedAuthor.count)}
-          </span>
-          <button
-            type="button"
-            onClick={onClearAuthor}
-            className="flex flex-none cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[12px] font-semibold text-[var(--reader-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--reader-accent)_12%,transparent)]"
-          >
-            All notes
-            <X size={13} strokeWidth={2.5} />
-          </button>
-        </div>
-      )}
-      {items.length === 0 ? (
-        <NoResults
-          className="mt-5"
-          message={
-            filter === "notes"
-              ? "No notes in this book yet — be the first to say something."
-              : "You have no private highlights in this book"
-          }
-        />
+      {onChat ? (
+        <RoomChatList />
       ) : (
-        // pt-4 — PanelShell's own body has no top padding by default (its
-        // bottom padding is for scroll clearance above the footer, not a
-        // symmetric pair), so without this the first run's label sits
-        // flush against the subheader's own bottom border with no breathing
-        // room at all.
-        <div className="flex flex-col pt-4">
-          {runs.map((run, runIndex) => (
-            <div key={run.key} className={runIndex === 0 ? undefined : "mt-6"}>
-              <FeedItemLabel run={run} filter={filter} />
-              {/* Items within the same run sit closer together (gap-4)
-                  than the space reserved above the next run (mt-6 on the
-                  wrapper above) — same "tighter within a group, looser
-                  between groups" convention as the general run's own
-                  spacing before it was flattened here. */}
-              <div className="flex flex-col gap-4">
-                {run.items.map((item) => (
-                  <div key={feedItemElementId(item)} id={feedItemElementId(item)}>
-                    {item.kind === "highlight" ? (
-                      <FeedHighlightThread
-                        materialId={materialId}
-                        entry={item.entry}
-                        getPassageText={getPassageText}
-                        onJump={onJump}
-                        targetThreadId={targetThreadId}
-                      />
-                    ) : (
-                      <GeneralNoteThread
-                        materialId={materialId}
-                        note={item.note}
-                        allNotes={notes}
-                        initialShowAll={targetNoteId === item.note.id || targetThreadId === item.note.id}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
+        <>
+          {focusedAuthor && (
+            <div
+              ref={listTopRef}
+              className="reader-menu-in mt-3 flex items-center gap-2.5 rounded-full bg-[color-mix(in_srgb,var(--reader-accent)_10%,transparent)] py-1 pl-1 pr-1.5"
+            >
+              <ReaderAvatar pseudonym={focusedAuthor.author.pseudonym} avatar={focusedAuthor.author.avatar} size={26} />
+              <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--reader-text-muted)]">
+                <span className="font-semibold text-[var(--reader-text)]">{comradeName(focusedAuthor.author.pseudonym)}</span>
+                {" · "}
+                {notesLabel(focusedAuthor.count)}
+              </span>
+              <button
+                type="button"
+                onClick={onClearAuthor}
+                className="flex flex-none cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[12px] font-semibold text-[var(--reader-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--reader-accent)_12%,transparent)]"
+              >
+                All notes
+                <X size={13} strokeWidth={2.5} />
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+          {items.length === 0 ? (
+            <NoResults
+              className="mt-5"
+              message={
+                filter === "notes"
+                  ? "No notes in this book yet — be the first to say something."
+                  : "You have no private highlights in this book"
+              }
+            />
+          ) : (
+            // pt-4 — PanelShell's own body has no top padding by default (its
+            // bottom padding is for scroll clearance above the footer, not a
+            // symmetric pair), so without this the first run's label sits
+            // flush against the subheader's own bottom border with no breathing
+            // room at all.
+            <div className="flex flex-col pt-4">
+              {runs.map((run, runIndex) => (
+                <div key={run.key} className={runIndex === 0 ? undefined : "mt-6"}>
+                  <FeedItemLabel run={run} filter={filter} />
+                  {/* Items within the same run sit closer together (gap-4)
+                      than the space reserved above the next run (mt-6 on the
+                      wrapper above) — same "tighter within a group, looser
+                      between groups" convention as the general run's own
+                      spacing before it was flattened here. */}
+                  <div className="flex flex-col gap-4">
+                    {run.items.map((item) => (
+                      <div key={feedItemElementId(item)} id={feedItemElementId(item)}>
+                        {item.kind === "highlight" ? (
+                          <FeedHighlightThread
+                            materialId={materialId}
+                            entry={item.entry}
+                            getPassageText={getPassageText}
+                            onJump={onJump}
+                            targetThreadId={targetThreadId}
+                          />
+                        ) : (
+                          <GeneralNoteThread
+                            materialId={materialId}
+                            note={item.note}
+                            allNotes={notes}
+                            initialShowAll={targetNoteId === item.note.id || targetThreadId === item.note.id}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </PanelShell>
   );

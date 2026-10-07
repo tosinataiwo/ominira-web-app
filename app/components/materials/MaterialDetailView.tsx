@@ -16,6 +16,7 @@ import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import BookCover from "@/app/components/shared/BookCover";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { ReadingNowMetaItem, ReadingRoomModal } from "@/app/components/shared/CurrentReaders";
+import LiveChip from "@/app/components/room/LiveChip";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 import PulseDot from "@/app/components/shared/PulseDot";
 import NoteCard from "@/app/components/reader/notes/NoteCard";
@@ -447,6 +448,8 @@ export default function MaterialDetailView({ material }: { material: MaterialDet
               )
             }
           />
+
+          <LiveChip materialId={material.id} className="mt-3" />
 
           <ContributorRow material={material} />
 

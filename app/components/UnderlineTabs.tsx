@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 /**
  * Shared underline-tab bar: brand-colored active tab with a bottom border,
  * muted inactive tabs. Originally Shelf's reading/saved/finished switcher
@@ -13,7 +15,7 @@ export default function UnderlineTabs<T extends string>({
   onChange,
   bare = false,
 }: {
-  options: { value: T; label: string }[];
+  options: { value: T; label: ReactNode }[];
   value: T;
   onChange: (value: T) => void;
   /** Drops the bar's own baseline, for a container that draws it instead

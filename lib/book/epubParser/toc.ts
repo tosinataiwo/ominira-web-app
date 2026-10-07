@@ -201,6 +201,10 @@ export async function parseToc(zip: ZipReader, pkg: PackageDoc): Promise<TocEntr
           const entries = parseNavList(listEl, paths.dirOf(pkg.navPath), pkg.navPath);
           if (entries.length) return entries;
         }
+      } else {
+        // Some EPUBs mark an NCX as the nav document.
+        const entries = parseNcx(data, paths.dirOf(pkg.navPath));
+        if (entries.length) return entries;
       }
     }
   }

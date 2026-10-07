@@ -7,6 +7,8 @@ import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { useProfile } from "@/lib/auth/useProfile";
+import { useLayoutStore } from "@/stores/layout-store";
+import { roomChatUnread, useRoomStore } from "@/stores/room-store";
 import { LiveBadge, LiveMark, compact, notesLabel, usePresence, type Live } from "./ReaderPresence";
 import { avatarRingColor, type Avatar } from "@/lib/avatar/avatar";
 import type { BookAnnotationFeed, NoteAuthor } from "@/lib/reader/useBookAnnotationFeed";
@@ -104,13 +106,18 @@ export default function NotesFeedFab({
     closeNotesPanel();
     feed.openFeed(readerId);
   };
+  // In the room on this book, the notes button carries room chat's unread
+  // count instead and opens the chat (spec §1.4).
+  const chatUnread = useRoomStore((s) => roomChatUnread(s, materialId)) ?? 0;
   const onOpenFeed = () => {
     if (feed.open) return feed.close();
     closeNotesPanel();
-    feed.openFeed();
+    if (chatUnread > 0) feed.openChat();
+    else feed.openFeed();
   };
   const { data: me } = useProfile();
   const presence = usePresence(materialId);
+  const roomPlayerHeight = useLayoutStore((s) => s.roomPlayerHeight);
   // Folded on arrival in every format — just the reader's own seat, nothing
   // between them and the text. Tapping it opens the rail; closing it or
   // scrolling the chrome away folds it back.
@@ -216,17 +223,25 @@ export default function NotesFeedFab({
   const summary = [notesLine, presence.count > 0 && `${presence.count} currently ${liveWord}`].filter(Boolean).join(", ");
 
   const overflow = faces.length - shown.length;
-  const badge = noteCount > 0 && (
-    <span className="reader-face-in absolute right-0 top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[var(--reader-accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-[var(--reader-bg)] ring-2 ring-[var(--reader-surface)]">
-      {noteCount > 99 ? "99+" : noteCount}
+  const badgeCount = chatUnread || noteCount;
+  const badge = badgeCount > 0 && (
+    <span
+      className={`reader-face-in absolute right-0 top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none tabular-nums ring-2 ring-[var(--reader-surface)] ${
+        chatUnread ? "bg-brand-500 text-white" : "bg-[var(--reader-accent)] text-[var(--reader-bg)]"
+      }`}
+    >
+      {badgeCount > 99 ? "99+" : badgeCount}
     </span>
   );
+  const chatLabel = chatUnread > 0 && `${chatUnread} unread in room chat`;
 
   return (
     <div
+      // Phones: rides above the room's mini-player too, when there is one.
+      style={{ "--room-player-h": `${roomPlayerHeight}px` } as CSSProperties}
       className={`fixed z-40 transition-[scale,opacity] duration-200 ease-out ${
         folded ? "right-[calc(2px+env(safe-area-inset-right))]" : "right-[calc(16px+env(safe-area-inset-right))]"
-      } shell:right-[calc(16px+env(safe-area-inset-right))] bottom-[calc(76px+env(safe-area-inset-bottom))] shell:bottom-auto shell:top-1/2 shell:-translate-y-1/2 ${
+      } shell:right-[calc(16px+env(safe-area-inset-right))] bottom-[calc(76px+var(--room-player-h)+env(safe-area-inset-bottom))] shell:bottom-auto shell:top-1/2 shell:-translate-y-1/2 ${
         visible ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
       }`}
     >
@@ -257,14 +272,20 @@ export default function NotesFeedFab({
         // × folds it again.
         <button
           onClick={() => setFolded(false)}
-          aria-label={`Show readers — ${summary}`}
+          aria-label={`Show readers — ${[chatLabel, summary].filter(Boolean).join(", ")}`}
           aria-expanded={false}
           title="Show readers"
-          className="reader-face-in group flex cursor-pointer items-center rounded-full p-1 transition-transform duration-150 hover:scale-[1.03] active:scale-95"
+          className="reader-face-in group relative flex cursor-pointer items-center rounded-full p-1 transition-transform duration-150 hover:scale-[1.03] active:scale-95"
         >
           <span className="reader-story-ring relative flex-none origin-bottom-right scale-[0.75] shell:scale-100">
             <MyFace me={me} />
           </span>
+          {chatUnread > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-brand-500 ring-2 ring-[var(--reader-surface)]"
+            />
+          )}
         </button>
       ) : (
         // Open: the faces stack (overlapping, like a group chat's) and the
@@ -326,8 +347,8 @@ export default function NotesFeedFab({
 
           <button
             onClick={onOpenFeed}
-            aria-label={noteCount > 0 ? `Open all ${notesLabel(noteCount)}` : "Leave the first note"}
-            title={noteCount > 0 ? "Open all notes" : "Leave the first note"}
+            aria-label={chatLabel || (noteCount > 0 ? `Open all ${notesLabel(noteCount)}` : "Leave the first note")}
+            title={chatLabel ? "Open room chat" : noteCount > 0 ? "Open all notes" : "Leave the first note"}
             className="relative flex h-10 w-10 flex-none cursor-pointer items-center justify-center rounded-full text-[var(--reader-text-muted)] transition-colors hover:bg-[var(--reader-surface-hover)]"
           >
             <MessageCircle size={21} strokeWidth={2} />

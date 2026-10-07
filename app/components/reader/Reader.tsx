@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Highlighter, MessageCircle, Share, Trash2 } from "lucide-react";
+import { Copy, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
 import NotesSidebar from "./NotesSidebar";
 import BookAnnotationFeedPanel from "./notes/BookAnnotationFeedPanel";
 import { epubFeedLocator, type FeedEntry } from "@/lib/reader/annotationFeed";
@@ -31,6 +31,7 @@ import {
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useAudioStore } from "@/stores/audio-store";
+import { useDockedHeight } from "@/app/components/useBottomDock";
 import { useNarrationStore } from "@/stores/narration-store";
 import { activeWordIndex } from "@/lib/audio/karaoke";
 import { buildSectionsById, resolveSpineTarget } from "@/lib/reader/sections";
@@ -45,6 +46,10 @@ import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
 import { useServerPositionReady } from "@/lib/reader/useServerPositionReady";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
+import { buildEpubScale } from "@/lib/reader/locator";
+import { epubView } from "@/lib/room/view";
+import { useRoomView } from "@/lib/room/useRoomView";
+import { useShareToRoom } from "@/lib/room/sharePassage";
 
 export default function Reader({
   book,
@@ -162,7 +167,7 @@ export default function Reader({
   const playAudio = useAudioStore((s) => s.play);
   const pauseAudio = useAudioStore((s) => s.pause);
   const updateBookContent = useAudioStore((s) => s.updateBookContent);
-  const playerHeight = useAudioStore((s) => s.playerHeight);
+  const dockedHeight = useDockedHeight();
   const anyPlayerActive = audioStoreBook !== null;
   // Listening no longer requires a prerecorded narratorTrack — NarrationEngine
   // falls back to live, on-demand AI narration for any section without one —
@@ -314,6 +319,7 @@ export default function Reader({
 
   const locateFeedEntry = useMemo(() => epubFeedLocator(orderedSections), [orderedSections]);
   const noteFeed = useBookAnnotationFeed({ materialId, locate: locateFeedEntry });
+  const shareToRoom = useShareToRoom(materialId);
 
   // Published so NowPlayingBar (rendered in the root layout, well outside
   // this tree) can pull its own right edge in on desktop — see
@@ -974,6 +980,36 @@ export default function Reader({
   // means for anyone on a larger screen.
   const passageFontSize = isMobile ? Math.max(FONT_SIZE_PX_RANGE.min, fontSize - 1.5) : fontSize;
 
+  // This reader as a live room sees it (lib/room/view.ts): following,
+  // the margin and the speaker band, once the reader has landed. Rebuilt
+  // when the section on screen changes, which tells the room you moved
+  // (a section turn needn't scroll).
+  const [readingArea, setReadingArea] = useState<HTMLDivElement | null>(null);
+  const epubScale = useMemo(() => buildEpubScale(book), [book]);
+  const roomView = useMemo(
+    () =>
+      isReady && readingArea
+        ? epubView({
+            materialId,
+            mode: isListen ? "listen" : "read",
+            root: readingArea,
+            topInset: () => topBarHeightPx,
+            scale: epubScale,
+            section: (id) => sectionsById.get(id),
+            goToSection: (id) => goToSection(id, { animate: false }),
+            sectionLabel: (id) => {
+              const section = sectionsById.get(id);
+              return section ? sectionLabel(section) : null;
+            },
+            surface: () => selectionSurface,
+          })
+        : null,
+    // activeSectionId: a section turn is a move, so it's a new view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isReady, readingArea, materialId, isListen, topBarHeightPx, epubScale, goToSection, sectionsById, selectionSurface, activeSectionId]
+  );
+  useRoomView(roomView, selection?.ranges ?? null);
+
   return (
     <div
       data-reader-theme={theme}
@@ -988,6 +1024,7 @@ export default function Reader({
     >
       <div className="flex-1 min-h-0 relative overflow-hidden">
         <ReaderHeader
+          materialId={materialId}
           visible={chromeVisible}
           topBarHeightPx={topBarHeightPx}
           railInsetPx={railInsetPx}
@@ -1045,7 +1082,7 @@ export default function Reader({
               specifically so the reader stays visible/scrollable behind
               it — same as the notes panel, which never dimmed this
               either). */}
-          <div className="flex-1 min-w-0 h-full flex flex-col relative" style={{ background: "var(--reader-bg)" }}>
+          <div ref={setReadingArea} className="flex-1 min-w-0 h-full flex flex-col relative" style={{ background: "var(--reader-bg)" }}>
             <BookContent
               book={book}
               activeIndex={activeIndex}
@@ -1092,7 +1129,7 @@ export default function Reader({
               // just doubles up the same affordance right above the "now
               // playing" bar.
               visible={footerVisible && !selection && !anyPlayerActive}
-              bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
+              bottomOffsetPx={dockedHeight}
             />
 
             {/* Selection menu is a fixed-position overlay, so it doesn't need
@@ -1109,7 +1146,7 @@ export default function Reader({
               <SelectionMenu
                 anchor={selection.anchor}
                 isMobile={isMobile}
-                bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
+                bottomOffsetPx={dockedHeight}
                 theme={theme}
                 items={
                   [
@@ -1133,6 +1170,25 @@ export default function Reader({
                         dismissSelection();
                       },
                     },
+                    ...(shareToRoom
+                      ? [
+                          {
+                            key: "room",
+                            icon: <MessageSquareQuote size={isMobile ? 18 : 14} />,
+                            label: "Share to room",
+                            onClick: () => {
+                              shareToRoom({
+                                ranges: selection.ranges,
+                                quote: quoteForRanges(selection.ranges, getPassageText),
+                                label: locateFeedEntry(selection.ranges[0].passageId)?.label ?? "",
+                              });
+                              if (notesPanel) closeNotesPanel();
+                              noteFeed.openChat();
+                              dismissSelection();
+                            },
+                          },
+                        ]
+                      : []),
                     ...(hasExistingAnnotation
                       ? [{ key: "delete", icon: <Trash2 size={isMobile ? 18 : 14} />, label: "Delete", onClick: deleteSelection, danger: true }]
                       : []),
@@ -1152,7 +1208,7 @@ export default function Reader({
               <SelectionMenu
                 anchor={overlay.anchor}
                 isMobile={isMobile}
-                bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
+                bottomOffsetPx={dockedHeight}
                 theme={theme}
                 items={[]}
                 override={
@@ -1268,7 +1324,7 @@ export default function Reader({
       </div>
 
       {currentPlayingPassageId && awayFromNarration && (
-        <BackToCurrentButton bottom={playerHeight + 16} direction={nudgeDirection} onClick={jumpToNarration} />
+        <BackToCurrentButton bottom={dockedHeight + 16} direction={nudgeDirection} onClick={jumpToNarration} />
       )}
 
       <NotesFeedFab

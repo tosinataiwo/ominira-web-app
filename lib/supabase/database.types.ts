@@ -493,6 +493,48 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
       };
+      /** Reading Room — migrations/20261011_rooms.sql … 20261015_room_membership.sql.
+       * Written only through the room SQL functions below (start_room,
+       * join_room, leave_room, end_room), never inserted directly. */
+      rooms: {
+        Row: {
+          id: string;
+          group_id: string | null;
+          session_id: string | null;
+          material_id: string;
+          /** Null shows as "<book title> reading room" (lib/room/title.ts). */
+          title: string | null;
+          started_by: string;
+          status: "live" | "ended";
+          started_at: string;
+          ended_at: string | null;
+          full_seconds: number;
+          full_since: string | null;
+          max_members: number;
+        };
+        Insert: {
+          id?: string;
+          group_id?: string | null;
+          session_id?: string | null;
+          material_id: string;
+          title?: string | null;
+          started_by: string;
+          status?: "live" | "ended";
+          started_at?: string;
+          ended_at?: string | null;
+          full_seconds?: number;
+          full_since?: string | null;
+          max_members?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["rooms"]["Insert"]>;
+        Relationships: [];
+      };
+      room_members: {
+        Row: { room_id: string; reader_id: string; joined_at: string; left_at: string | null; last_seen_at: string };
+        Insert: { room_id: string; reader_id: string; joined_at?: string; left_at?: string | null; last_seen_at?: string };
+        Update: Partial<Database["public"]["Tables"]["room_members"]["Insert"]>;
+        Relationships: [];
+      };
     };
     // Required by supabase-js's GenericSchema shape even with no views —
     // omitting it collapses the whole schema (and every table's row type) to
@@ -501,6 +543,21 @@ export type Database = {
     Functions: {
       /** migrations/20261005_admin_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
+      /** Reading Room (migrations/20261012…20261015). Null when the book can't host a room. */
+      start_room: { Args: { material: string; reader: string; room_title: string | null }; Returns: string | null };
+      join_room: {
+        Args: { room: string; reader: string };
+        Returns: "joined" | "not_found" | "ended" | "forbidden" | "full";
+      };
+      leave_room: { Args: { room: string; reader: string }; Returns: undefined };
+      end_room: { Args: { room: string }; Returns: boolean };
+      room_moderator_ids: { Args: { room: string }; Returns: string[] };
+      /** Members in the room now (left_at null, seen within 75 s). */
+      room_active_count: { Args: { room: string }; Returns: number };
+      is_room_moderator: { Args: { room: string; reader: string }; Returns: boolean };
+      can_join_room: { Args: { room: string; reader: string }; Returns: boolean };
+      /** Called by the reader in the room (authenticated). False: aged out or ended, rejoin. */
+      room_heartbeat: { Args: { room: string }; Returns: boolean };
     };
   };
 };

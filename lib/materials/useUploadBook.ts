@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { apiFetch } from "@/lib/api/client";
+import { isUploadImageName } from "@/lib/materials/uploadPaths";
+import type { BookDocument, Section } from "@/lib/book/schema";
 
 export type UploadStage = "idle" | "parsing" | "uploading" | "done" | "error";
 
@@ -36,7 +38,36 @@ function guessImageMime(path: string): string {
   if (/\.gif$/i.test(path)) return "image/gif";
   if (/\.svg$/i.test(path)) return "image/svg+xml";
   if (/\.webp$/i.test(path)) return "image/webp";
+  if (/\.avif$/i.test(path)) return "image/avif";
+  if (/\.bmp$/i.test(path)) return "image/bmp";
   return "image/png";
+}
+
+/** A body image's name in its upload's images folder — the asset's own
+ * basename made URL-safe, de-duplicated like publish.py's _unique_filename. */
+function uniqueImageName(zipPath: string, used: Set<string>): string {
+  const base = (zipPath.split("/").pop() || "asset").replace(/[^\w.-]/g, "_");
+  const dot = base.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [base.slice(0, dot), base.slice(dot)] : [base, ""];
+  let name = base;
+  for (let n = 2; used.has(name); n++) name = `${stem}-${n}${ext}`;
+  used.add(name);
+  return name;
+}
+
+/** publish.py's _rewrite_images: zip paths -> uploaded URLs; a src whose
+ * asset never got uploaded is dropped rather than left dangling. */
+function rewriteImages(sections: Section[], urlByPath: Map<string, string>): void {
+  for (const section of sections) {
+    for (const passage of section.passages) {
+      const src = passage.src;
+      if (!src) continue;
+      const url = urlByPath.get(src);
+      if (url) passage.src = url;
+      else if (!/^(https?|data):/.test(src)) delete passage.src;
+    }
+    rewriteImages(section.children, urlByPath);
+  }
 }
 
 /**
@@ -123,18 +154,21 @@ export function useUploadBook() {
         let title: string;
         let author: string;
         let pageCount: number | undefined;
-        let documentJson: Blob | undefined;
         let thumbnailBlob: Blob | undefined;
+        // EPUB only: the parsed book (image srcs still zip paths until the
+        // signed upload's public URLs are known), its cover's zip path, and
+        // its body images keyed by upload name.
+        let epub: { book: BookDocument; coverPath: string | null; images: Map<string, { zipPath: string; blob: Blob }> } | undefined;
 
         if (isEpub(file)) {
           const { parseEpub, ZipReader } = await import("@/lib/book/epubParser");
           const buffer = await file.arrayBuffer();
-          const { book, coverPath } = await parseEpub(buffer, { slugHint: fileBaseName(file) });
+          const { book, coverPath, imagePaths } = await parseEpub(buffer, { slugHint: fileBaseName(file) });
           materialType = "book";
           title = book.metadata.title;
           author = book.metadata.author || "";
-          documentJson = new Blob([JSON.stringify(book)], { type: "application/json" });
           opts.onMetadata?.({ title, author });
+          const zip = await ZipReader.open(buffer);
           // The EPUB's own declared cover, pulled straight out of the same
           // archive `parseEpub` already read — a second, cheap zip-entry
           // read (no re-parsing) rather than plumbing the image out through
@@ -144,7 +178,6 @@ export function useUploadBook() {
           // as the material's cover_url, same as a PDF's first page below.
           if (coverPath) {
             try {
-              const zip = await ZipReader.open(buffer);
               const coverBytes = await zip.readArrayBuffer(coverPath);
               if (coverBytes) {
                 thumbnailBlob = new Blob([coverBytes], { type: guessImageMime(coverPath) });
@@ -155,6 +188,19 @@ export function useUploadBook() {
               // the upload itself, which never needed this image anyway.
             }
           }
+          // Body images, as publish.py uploads them: the cover is already
+          // covered by the thumbnail; an asset missing from the zip (or not
+          // an image type we host) is skipped, and its src dropped below.
+          const images = new Map<string, { zipPath: string; blob: Blob }>();
+          const used = new Set<string>();
+          for (const zipPath of imagePaths) {
+            if ((zipPath === coverPath && thumbnailBlob) || /^(https?|data):/.test(zipPath)) continue;
+            const bytes = await zip.readArrayBuffer(zipPath);
+            if (!bytes) continue;
+            const name = uniqueImageName(zipPath, used);
+            if (isUploadImageName(name)) images.set(name, { zipPath, blob: new Blob([bytes], { type: guessImageMime(name) }) });
+          }
+          epub = { book, coverPath, images };
         } else if (isPdf(file)) {
           const { parsePdf } = await import("@/lib/book/pdfParser");
           const buffer = await file.arrayBuffer();
@@ -181,16 +227,44 @@ export function useUploadBook() {
         report("uploading");
         // Sign -> PUT straight to Storage -> finalize. The bytes never pass
         // through our own API (see POST /api/materials/upload/sign).
-        const { uploadId, urls } = await apiFetch<{
+        const { uploadId, urls, publicUrls } = await apiFetch<{
           uploadId: string;
-          urls: { source: string; json: string | null; thumbnail: string | null };
+          urls: { source: string; json: string | null; thumbnail: string | null; images: Record<string, string> };
+          publicUrls: { thumbnail: string | null; images: Record<string, string> };
         }>("/materials/upload/sign", {
-          json: { materialType, fileSize: file.size, thumbnailType: thumbnailBlob?.type ?? null },
+          json: {
+            materialType,
+            fileSize: file.size,
+            thumbnailType: thumbnailBlob?.type ?? null,
+            imageNames: epub ? [...epub.images.keys()] : [],
+          },
         });
+        let documentJson: Blob | undefined;
+        if (epub) {
+          // publish.py's order: cover URL into metadata, then every image
+          // src rewritten to its uploaded URL.
+          const urlByPath = new Map<string, string>();
+          if (epub.coverPath && publicUrls.thumbnail) urlByPath.set(epub.coverPath, publicUrls.thumbnail);
+          for (const [name, { zipPath }] of epub.images) urlByPath.set(zipPath, publicUrls.images[name]);
+          epub.book.metadata.cover = publicUrls.thumbnail ?? "";
+          rewriteImages(epub.book.sections, urlByPath);
+          documentJson = new Blob([JSON.stringify(epub.book)], { type: "application/json" });
+        }
+        const putImages = async () => {
+          // A few at a time, each retried: Storage occasionally resets a
+          // connection, and one lost image shouldn't fail the whole book.
+          const put = async (url: string, blob: Blob, attempt = 1): Promise<void> =>
+            putToSignedUrl(url, blob).catch((err) => (attempt < 3 ? put(url, blob, attempt + 1) : Promise.reject(err)));
+          const images = [...(epub?.images ?? [])];
+          for (let i = 0; i < images.length; i += 6) {
+            await Promise.all(images.slice(i, i + 6).map(([name, { blob }]) => put(urls.images[name], blob)));
+          }
+        };
         await Promise.all([
           putToSignedUrl(urls.source, file, opts.onProgress),
           urls.json && documentJson ? putToSignedUrl(urls.json, documentJson) : null,
           urls.thumbnail && thumbnailBlob ? putToSignedUrl(urls.thumbnail, thumbnailBlob) : null,
+          putImages(),
         ]);
         const result = await apiFetch<UploadedBook>("/materials/upload", {
           json: {

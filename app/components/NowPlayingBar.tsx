@@ -1,24 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import AudioPlayer from "./AudioPlayer";
+import { useBottomDock } from "./useBottomDock";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
-import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
-import { useLayoutStore } from "@/stores/layout-store";
-import { useReaderStore } from "@/stores/reader-store";
-
-// Matches both reader routes (app/read/[slug], the canonical/shareable URL,
-// and app/reader/[slug], the soft-navigable one ReaderLink actually lands
-// on — see that component's own doc comment) — deliberately with the
-// trailing slash: a bare `startsWith("/read")` also matches `/reading`
-// (app/(app)/reading/page.tsx, the "Continue reading" library page), which
-// would wrongly hide this bar's sidebar offset and bottom-nav clearance
-// while just browsing the library.
-function isReaderPath(pathname: string): boolean {
-  return pathname.startsWith("/read/") || pathname.startsWith("/reader/");
-}
 
 /**
  * The one persistent "now playing" bar — mounted once in the root layout
@@ -29,17 +16,6 @@ function isReaderPath(pathname: string): boolean {
  * closePlayer) — navigating away, including to the library, never does.
  */
 export default function NowPlayingBar() {
-  // --reader-surface/--reader-border/etc. (globals.css) are scoped to
-  // [data-reader-theme] rather than :root, since only the reader itself
-  // (not the rest of the app) is meant to follow the light/dark toggle.
-  // This bar renders in the root layout though, outside Reader's own
-  // theme-scoped div — without setting the attribute again here, those
-  // variables would all resolve to nothing and the player would render
-  // with no background/border/text color at all.
-  //
-  // The bar lives outside Reader's theme-scoped tree, so it supplies the
-  // current theme attribute itself and stays visually continuous with the
-  // reader in either mode.
   const book = useAudioStore((s) => s.book);
   const closePlayer = useAudioStore((s) => s.closePlayer);
   const setPlayerHeight = useAudioStore((s) => s.setPlayerHeight);
@@ -50,50 +26,9 @@ export default function NowPlayingBar() {
   const skipToNextSection = useNarrationStore((s) => s.skipToNextSection);
   const handleSeek = useNarrationStore((s) => s.handleSeek);
   const isBuffering = useNarrationStore((s) => s.isBuffering);
-  const theme = useReaderStore((s) => s.theme);
-  // Every route except the reader itself now has a persistent left sidebar
-  // (app/components/shell/AppSidebar.tsx) at the same 860px breakpoint —
-  // full-width here would run this bar underneath it, covering the
-  // sidebar's own bottom-pinned theme/logout controls.
-  //
-  // pathname alone can't tell "the standalone /read page" (no sidebar)
-  // apart from "ReaderModal open over a sidebar-having page" (sidebar's
-  // still there) — an intercepted (.)read/[slug] navigation moves the URL
-  // to /read/[slug] either way. overlayOpen (reader-overlay-store) is what
-  // ReaderModal itself sets, so it's the actual source of truth here; a
-  // pathname starting with "/read" only means "no sidebar" when that flag
-  // says the overlay isn't the reason. Without this override, this bar ran
-  // full-width underneath the modal and sat on top of the sidebar's own
-  // nav items (z-50 vs. the sidebar's z-30) whenever a book was loaded for
-  // listening while the reader overlay was open — silently eating clicks
-  // on whatever nav item it happened to cover.
-  const pathname = usePathname();
   const router = useRouter();
-  const overlayOpen = useReaderOverlayStore((s) => s.open);
-  const hasSidebar = !isReaderPath(pathname) || overlayOpen;
+  const dock = useBottomDock();
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Floats above AppBottomNav (the mobile tab bar) rather than the other
-  // way around — see AppBottomNav's own doc comment. The reader is the one
-  // place AppBottomNav is either unmounted (standalone route) or fully
-  // covered by the modal panel (intercepted route) — bottomNavHeight can
-  // briefly go stale there (AppBottomNav unmounting doesn't reset it), so
-  // it's ignored outright rather than trusted while the reader's on screen.
-  // The intercepted (.)read/[slug] route still moves the URL to
-  // /read/[slug] (see the hasSidebar comment above), so pathname alone
-  // reliably tells "the reader itself is on screen" apart from "an ordinary
-  // page, sidebar or not".
-  const readerActive = isReaderPath(pathname);
-  const bottomNavHeight = useLayoutStore((s) => s.bottomNavHeight);
-  const bottomOffset = readerActive ? 0 : bottomNavHeight;
-
-  // The reader's own notes/annotation-feed panel (desktop "side" variant)
-  // is a plain flex sibling with no elevation of its own — without pulling
-  // in to clear it, this bar's full width ran right underneath its bottom
-  // edge, covering it. See layout-store's readerPanelOpen for why this only
-  // matters while the reader itself is on screen.
-  const readerPanelOpen = useLayoutStore((s) => s.readerPanelOpen);
-  const clearsReaderPanel = readerActive && readerPanelOpen;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -109,14 +44,7 @@ export default function NowPlayingBar() {
   if (!book) return null;
 
   return (
-    <div
-      ref={containerRef}
-      data-reader-theme={theme}
-      className={`fixed left-0 right-0 z-50 ${hasSidebar ? "shell:left-[var(--app-sidebar-w)]" : ""} ${
-        clearsReaderPanel ? "shell:right-95" : ""
-      }`}
-      style={{ bottom: bottomOffset }}
-    >
+    <div ref={containerRef} data-reader-theme={dock.theme} className={dock.className} style={{ bottom: dock.bottom }}>
       <AudioPlayer
         variant="full"
         bookTitle={book.metadata.title}

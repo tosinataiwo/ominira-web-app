@@ -15,4 +15,5 @@ export const materialKeys = {
   notesFeedPrefix: (materialId: string) => ["materials", materialId, "notes-feed"] as const,
   notesFeed: (materialId: string, sort: string) => ["materials", materialId, "notes-feed", sort] as const,
   currentReaders: (materialId: string) => ["materials", materialId, "current-readers"] as const,
+  room: (materialId: string) => ["materials", materialId, "room"] as const,
 };

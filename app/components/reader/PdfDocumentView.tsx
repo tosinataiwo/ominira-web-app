@@ -26,14 +26,21 @@ import { markStyle, NoteGlyph, useDocumentAnnotations } from "./DocumentAnnotati
 import { useSessionStore } from "@/stores/session-store";
 import type { FeedLocator } from "@/lib/reader/annotationFeed";
 import type { Annotation } from "@/stores/library-store";
+import { pdfView } from "@/lib/room/view";
+import { useRoomView } from "@/lib/room/useRoomView";
 
 const TOP_BAR_HEIGHT_PX = 60;
 const RAIL_INSET_PX = 16;
 const BOTTOM_BAR_HEIGHT_PX = 64;
 
-/** One document per viewer, so one fixed id — EmbedPDF is multi-document and
- * addresses everything by id. */
-const DOCUMENT_ID = "pdf";
+/** The open document's id. EmbedPDF is multi-document and addresses
+ * everything by id; each open gets a fresh one (DocumentManager generates it),
+ * never a fixed one. The engine is shared by the tab and keeps documents by
+ * id, and a viewer that unmounts closes its document asynchronously, so with
+ * a fixed id a late close from the previous viewer (or React's dev double
+ * mount) closed the next viewer's document: pages laid out and counted, but
+ * every render failed, leaving them blank until a reload. */
+const DocumentIdContext = createContext("");
 
 const VIEWPORT_GAP_PX = 12;
 const PAGE_GAP_PX = 16;
@@ -188,7 +195,7 @@ export default function PdfDocumentView({
       className="w-full h-dvh box-border overflow-hidden relative font-sans"
       style={{ background: "var(--reader-bg)" }}
     >
-      <ReaderHeader topBarHeightPx={TOP_BAR_HEIGHT_PX} railInsetPx={RAIL_INSET_PX} onClose={onClose} title={title} />
+      <ReaderHeader materialId={materialId} topBarHeightPx={TOP_BAR_HEIGHT_PX} railInsetPx={RAIL_INSET_PX} onClose={onClose} title={title} />
       <div className="absolute inset-x-0 bottom-0" style={{ top: TOP_BAR_HEIGHT_PX }}>
         {body}
       </div>
@@ -220,7 +227,7 @@ function PdfReader({
     () => [
       createPluginRegistration(DocumentManagerPluginPackage, {
         maxDocuments: 1,
-        initialDocuments: [{ buffer, name: title, documentId: DOCUMENT_ID }],
+        initialDocuments: [{ buffer, name: title }],
       }),
       createPluginRegistration(ViewportPluginPackage, { viewportGap: VIEWPORT_GAP_PX }),
       createPluginRegistration(ScrollPluginPackage, { defaultPageGap: PAGE_GAP_PX, defaultBufferSize: 2 }),
@@ -244,8 +251,7 @@ function PdfReader({
 
   return (
     <EmbedPDF engine={engine} plugins={plugins}>
-      {({ pluginsReady, documents }) => {
-        const doc = documents[DOCUMENT_ID];
+      {({ pluginsReady, activeDocument: doc }) => {
         if (!pluginsReady || !doc || doc.status === "loading") return <Loader confined />;
         if (doc.status === "error") {
           const code = doc.errorCode;
@@ -269,13 +275,15 @@ function PdfReader({
           return <PdfOpenError message="This PDF has no pages to show." />;
         }
         return (
-          <PdfReaderBody
-            materialId={materialId}
-            title={title}
-            urlLocator={urlLocator}
-            engine={engine}
-            document={doc.document}
-          />
+          <DocumentIdContext.Provider value={doc.id}>
+            <PdfReaderBody
+              materialId={materialId}
+              title={title}
+              urlLocator={urlLocator}
+              engine={engine}
+              document={doc.document}
+            />
+          </DocumentIdContext.Provider>
         );
       }}
     </EmbedPDF>
@@ -290,10 +298,15 @@ function PdfReader({
  * block (and offered to save the image). Text selection is the shared engine's
  * (lib/annotations), which draws its own. */
 function renderPdfPage({ pageIndex }: PageLayout) {
+  return <PdfPage pageIndex={pageIndex} />;
+}
+
+function PdfPage({ pageIndex }: { pageIndex: number }) {
+  const documentId = useContext(DocumentIdContext);
   return (
     <div {...{ [PDF_PAGE_ATTR]: pageIndex }} className="relative h-full w-full bg-white shadow-sm select-none no-callout">
-      <RenderLayer documentId={DOCUMENT_ID} pageIndex={pageIndex} scale={BASE_LAYER_SCALE} className="pointer-events-none block" />
-      <TilingLayer documentId={DOCUMENT_ID} pageIndex={pageIndex} className="pointer-events-none" />
+      <RenderLayer documentId={documentId} pageIndex={pageIndex} scale={BASE_LAYER_SCALE} className="pointer-events-none block" />
+      <TilingLayer documentId={documentId} pageIndex={pageIndex} className="pointer-events-none" />
       <PdfHighlightLayer pageIndex={pageIndex} />
     </div>
   );
@@ -397,10 +410,11 @@ function PdfReaderBody({
   document: PdfDocumentObject;
 }) {
   const readerId = useSessionStore((s) => s.readerId);
+  const documentId = useContext(DocumentIdContext);
 
-  const { provides: scroll, state: scrollState } = useScroll(DOCUMENT_ID);
+  const { provides: scroll, state: scrollState } = useScroll(documentId);
   const { provides: scrollCapability } = useScrollCapability();
-  const { provides: zoom, state: zoomState } = useZoom(DOCUMENT_ID);
+  const { provides: zoom, state: zoomState } = useZoom(documentId);
 
   const numPages = scrollState.totalPages;
   // Scrolled past the last page into the end panel, the scroll plugin sees no
@@ -424,9 +438,9 @@ function PdfReaderBody({
   useEffect(() => {
     if (!scrollCapability) return;
     return scrollCapability.onLayoutReady((event) => {
-      if (event.documentId === DOCUMENT_ID) setLayoutReady(true);
+      if (event.documentId === documentId) setLayoutReady(true);
     });
-  }, [scrollCapability]);
+  }, [scrollCapability, documentId]);
 
   const scrollToPage = useCallback(
     (page: number, behavior: "instant" | "smooth") => {
@@ -444,7 +458,7 @@ function PdfReaderBody({
   // where the reader stopped, not every page they passed. `commit` stays closed
   // until resume has landed (see useDocumentProgress), which is what stops the
   // initial page-1 report from overwriting the saved page.
-  const { commit, getPositionNow } = useDocumentProgress({
+  const { commit, getPositionNow, resumeApplied } = useDocumentProgress({
     materialId,
     kind: "page",
     urlLocator,
@@ -503,6 +517,23 @@ function PdfReaderBody({
   });
   const { getForPassage } = annotations;
 
+  // This reader as a live room sees it (lib/room/view.ts), once it has landed.
+  const roomView = useMemo(
+    () =>
+      resumeApplied && scrollEl && scroll && numPages > 0
+        ? pdfView({
+            materialId,
+            root: scrollEl,
+            pageCount: numPages,
+            pageSize: (pageIndex) => document.pages[pageIndex]?.size,
+            scrollToPage: (options) => scroll.scrollToPage(options),
+            surface: () => surface,
+          })
+        : null,
+    [resumeApplied, scrollEl, scroll, numPages, materialId, document, surface]
+  );
+  useRoomView(roomView, annotations.selection?.ranges ?? null);
+
   const annotationsContext = useMemo<PdfAnnotationsContextValue | null>(
     () =>
       surface && {
@@ -525,13 +556,13 @@ function PdfReaderBody({
   return (
     <PdfAnnotationsContext.Provider value={annotationsContext}>
       <div className="absolute inset-x-0 top-0" style={{ bottom: `calc(${BOTTOM_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom))` }}>
-        <Viewport documentId={DOCUMENT_ID} style={viewportStyle}>
+        <Viewport documentId={documentId} style={viewportStyle}>
             <ViewportElementReporter onElement={setScrollEl} />
             {/* Pinch and ⌘/Ctrl-scroll zoom are the viewer's own: it re-renders sharp
                 at the new zoom, instead of the browser magnifying a bitmap — the
                 "blurry text" half of the old viewer's problem. */}
-            <ZoomGestureWrapper documentId={DOCUMENT_ID} style={{ position: "relative" }}>
-              <Scroller documentId={DOCUMENT_ID} renderPage={renderPdfPage} />
+            <ZoomGestureWrapper documentId={documentId} style={{ position: "relative" }}>
+              <Scroller documentId={documentId} renderPage={renderPdfPage} />
             </ZoomGestureWrapper>
             {/* The end screen simply sits after the last page. Sticky to the left
                 edge so it stays in view when a zoomed-in document is scrolled

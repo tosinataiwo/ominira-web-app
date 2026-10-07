@@ -69,11 +69,21 @@ export default function DocxDocumentView({
   // the article (and the paragraph under a reader's finger) on every render.
   const [markup, setMarkup] = useState<{ __html: string } | null>(null);
   const [error, setError] = useState(false);
-  const { scrollRef, contentRef, scrollElement, getPositionNow } = useArticleProgress({ materialId, urlLocator });
+  const { scrollRef, contentRef, scrollElement, getPositionNow, resumeApplied } = useArticleProgress({
+    materialId,
+    urlLocator,
+  });
   // Arrows/PageUp/PageDown/Space/Home/End scroll the document on desktop — see
   // the hook; with no pages to turn, ←/→ move by a screenful.
   useDocumentKeyboard({ scrollElement });
-  const { attachContent, chrome, highlights } = useArticleAnnotations({ materialId, title, contentRef, scrollElement, typography });
+  const { attachContent, chrome, highlights } = useArticleAnnotations({
+    materialId,
+    title,
+    contentRef,
+    scrollElement,
+    typography,
+    ready: resumeApplied,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +111,7 @@ export default function DocxDocumentView({
       className="w-full h-dvh box-border flex flex-col overflow-hidden relative font-sans"
       style={{ background: "var(--reader-bg)" }}
     >
-      <ReaderHeader topBarHeightPx={TOP_BAR_HEIGHT_PX} railInsetPx={RAIL_INSET_PX} onClose={onClose} title={title} />
+      <ReaderHeader materialId={materialId} topBarHeightPx={TOP_BAR_HEIGHT_PX} railInsetPx={RAIL_INSET_PX} onClose={onClose} title={title} />
       <div ref={scrollRef} className={ARTICLE_SCROLL_CLASS} style={{ paddingTop: TOP_BAR_HEIGHT_PX }}>
         <div className="mx-auto px-6 py-10" style={{ maxWidth: typography.maxWidth }}>
           {error ? (
