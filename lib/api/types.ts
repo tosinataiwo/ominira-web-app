@@ -194,6 +194,8 @@ export type ReaderProfile = {
   avatar: Avatar;
   /** Opted in to admin email announcements (off by default). */
   emailAnnouncements: boolean;
+  /** Approved by an admin to upload books (/admin/readers), or an admin. */
+  canUpload: boolean;
   joinedAt: string;
   updatedAt: string;
 };

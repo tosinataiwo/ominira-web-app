@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, CircleAlert, CircleCheck, CircleDashed, Library, Send } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CircleAlert, CircleCheck, CircleDashed, Library, Send, Users } from "lucide-react";
 import AdminPageHeader from "./AdminPageHeader";
 import ActivityChart from "./ActivityChart";
 import InfoTip from "./InfoTip";
@@ -66,6 +66,7 @@ export default async function AdminDashboardPage() {
         actions={
           <>
             <QuickAction href="/admin/library" icon={<Library size={14} />} label="Library" />
+            <QuickAction href="/admin/readers" icon={<Users size={14} />} label="Readers" />
             <QuickAction href="/admin/push" icon={<Send size={14} />} label="Send" primary />
           </>
         }

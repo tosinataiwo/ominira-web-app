@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader, isAdminReader } from "@/lib/auth/session";
-import { unauthorized, validationError } from "@/lib/api/errors";
+import { forbidden, unauthorized, validationError } from "@/lib/api/errors";
+import { readerCanUpload } from "@/lib/auth/profile";
 import { STORAGE_BUCKET } from "@/lib/storage/config";
 import { ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes } from "@/lib/materials/uploadLimits";
 import { isUploadMaterialType, thumbnailExtension, uploadObjectPaths } from "@/lib/materials/uploadPaths";
@@ -19,6 +20,7 @@ type Body = { materialType?: unknown; fileSize?: unknown; thumbnailType?: unknow
 export async function POST(request: Request) {
   const reader = await getAuthenticatedReader(request);
   if (!reader) return unauthorized();
+  if (!(await readerCanUpload(reader))) return forbidden("Uploading books is open to approved readers only.");
 
   const body = (await request.json().catch(() => ({}))) as Body;
   if (!isUploadMaterialType(body.materialType)) return validationError("materialType must be 'book', 'pdf', or 'docx'.", "materialType");

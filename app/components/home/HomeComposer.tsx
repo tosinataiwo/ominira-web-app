@@ -449,7 +449,8 @@ export default function HomeComposer({ defaultTopicId = null }: { defaultTopicId
 
       <div className="flex flex-none items-center justify-between gap-3 border-t border-[var(--reader-border)] px-4 py-2.5">
         <div className="flex flex-none items-center gap-1">
-          {fileInput}
+          {profile?.canUpload && fileInput}
+          {profile?.canUpload && (
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={files.length >= MAX_FILES}
@@ -464,6 +465,7 @@ export default function HomeComposer({ defaultTopicId = null }: { defaultTopicId
               </span>
             )}
           </button>
+          )}
         </div>
 
         <div className="flex flex-none items-center gap-2">

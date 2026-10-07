@@ -2,7 +2,8 @@ import { NextResponse, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader, isAdminReader } from "@/lib/auth/session";
-import { unauthorized, validationError } from "@/lib/api/errors";
+import { forbidden, unauthorized, validationError } from "@/lib/api/errors";
+import { readerCanUpload } from "@/lib/auth/profile";
 import { bucketPublicUrl, STORAGE_BUCKET } from "@/lib/storage/config";
 import { deleteContentObjects, putContentObject } from "@/lib/storage/filebase";
 import { parseBookDocument } from "@/lib/book/schema";
@@ -49,6 +50,7 @@ async function uniqueSlug(baseTitle: string): Promise<string> {
 export async function POST(request: Request) {
   const reader = await getAuthenticatedReader(request);
   if (!reader) return unauthorized();
+  if (!(await readerCanUpload(reader))) return forbidden("Uploading books is open to approved readers only.");
 
   const body = (await request.json().catch(() => ({}))) as {
     uploadId?: unknown;

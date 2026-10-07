@@ -56,6 +56,8 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
   // GET /api/materials/mine's own doc comment).
   const isAuthenticated = useIsAuthenticated();
   const { data: profile } = useProfile();
+  // Uploading is for admin-approved readers only (/admin/readers).
+  const canUpload = isAuthenticated && profile?.canUpload === true;
   const [view, setView] = useState<"catalog" | "mine">("catalog");
   const [myUploads, setMyUploads] = useState<MaterialSummary[] | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -109,7 +111,7 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
   return (
     <SearchableAppPage>
 
-      {isAuthenticated && addModalOpen && (
+      {canUpload && addModalOpen && (
         <AddBookModal
           category={category}
           categories={categories}
@@ -145,7 +147,7 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
         <>
           <div className="mb-7 flex items-baseline justify-between gap-3">
             <h1 className="m-0 font-serif text-[26px] font-bold text-[var(--reader-text)]">Personal</h1>
-            {isAuthenticated && (
+            {canUpload && (
               <button
                 type="button"
                 onClick={() => setAddModalOpen(true)}
@@ -166,7 +168,7 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
               <Loader confined />
             </div>
           ) : !myUploads || myUploads.length === 0 ? (
-            <NoResults message={`You haven't added any books yet — use "Add a book" above.`} />
+            <NoResults message={canUpload ? `You haven't added any books yet — use "Add a book" above.` : "You haven't added any books yet."} />
           ) : (
             <>
               <div className="mb-8">
@@ -216,7 +218,7 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
             />
           </div>
 
-          {isAuthenticated && (
+          {canUpload && (
             <ContributeBookRow category={category} stats={contributionStats} onClick={() => setAddModalOpen(true)} />
           )}
 

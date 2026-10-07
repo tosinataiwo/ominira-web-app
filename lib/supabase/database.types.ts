@@ -34,6 +34,7 @@ export type Database = {
           avatar_color: string | null;
           avatar_url: string | null;
           email_announcements: boolean;
+          upload_approved: boolean;
           joined_at: string;
           updated_at: string;
         };
@@ -52,6 +53,7 @@ export type Database = {
           avatar_color?: string | null;
           avatar_url?: string | null;
           email_announcements?: boolean;
+          upload_approved?: boolean;
           joined_at?: string;
           updated_at?: string;
         };
