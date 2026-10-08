@@ -12,6 +12,7 @@ const member = (readerId: string, joinedAt: number, extra: Partial<RoomPresence>
   sends: false,
   micOnAt: null,
   handRaisedAt: null,
+  readingAloud: null,
   followingId: null,
   progressPct: 0,
   mode: "read",
@@ -83,8 +84,8 @@ describe("sections", () => {
     expect(ids(selectHands(roster))).toEqual(["amara", "kofi"]);
   });
 
-  test("listening: mic off, join order, hands included", () => {
-    expect(ids(selectListening(roster))).toEqual(["kofi", "amara", "tunde"]);
+  test("listening: mic off, no hand up, join order", () => {
+    expect(ids(selectListening(roster))).toEqual(["tunde"]);
   });
 
   test("nobody speaking", () => {
@@ -93,12 +94,18 @@ describe("sections", () => {
 });
 
 describe("speakingLine", () => {
-  const named = (...names: string[]) => names.map((name) => ({ name }));
+  const named = (...names: string[]) => names.map((name) => ({ name, readingAloud: null }));
 
   test("nobody, one, two, many", () => {
     expect(speakingLine([])).toBeNull();
     expect(speakingLine(named("Ada"))).toBe("Comrade Ada is speaking");
     expect(speakingLine(named("Ada", "Comrade Sekou"))).toBe("Comrade Ada and Comrade Sekou are speaking");
     expect(speakingLine(named("Ada", "Sekou", "Kofi", "Amara"))).toBe("Comrade Ada, Comrade Sekou and 2 more are speaking");
+  });
+
+  test("a speaker reading aloud is the narrator's turn", () => {
+    const ada = { name: "Ada", readingAloud: "en-ZA-LeahNeural" };
+    expect(speakingLine([ada])).toBe("Leah is narrating via Comrade Ada");
+    expect(speakingLine([ada, ...named("Sekou")])).toBe("Leah is narrating via Comrade Ada · Comrade Sekou is speaking");
   });
 });

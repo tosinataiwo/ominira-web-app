@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useLayoutStore } from "@/stores/layout-store";
 import type { Section } from "@/lib/book/schema";
 
 type Props = {
@@ -15,7 +17,9 @@ type Props = {
    * the reading column underneath — mirrors how the header floats above
    * content rather than pushing it down. */
   visible: boolean;
-  /** Pushed up above the fixed "now playing" bar when one is active. */
+  /** Pushed up above the fixed "now playing" bar when one is active. The
+   * room's mini-player floats above this footer instead (it publishes its
+   * height while showing). */
   bottomOffsetPx: number;
 };
 
@@ -52,11 +56,25 @@ export default function ChapterNavFooter({
   bottomOffsetPx,
 }: Props) {
   const hasContent = Boolean(prevSection || nextSection);
+  const setFooterHeight = useLayoutStore((s) => s.setReaderFooterHeight);
+  const ref = useRef<HTMLDivElement>(null);
+  const shown = hasContent && visible;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !shown) return setFooterHeight(0);
+    const ro = new ResizeObserver((entries) => setFooterHeight(entries[0].borderBoxSize[0].blockSize));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      setFooterHeight(0);
+    };
+  }, [shown, setFooterHeight]);
 
   if (!hasContent) return null;
 
   return (
     <div
+      ref={ref}
       // Reserves the home-indicator safe area on notched iPhones instead of
       // running the tap targets flush to the very edge of the screen —
       // AppBottomNav (the app shell's own bottom bar) already does the same

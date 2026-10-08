@@ -31,7 +31,9 @@ export default function UnderlineTabs<T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           aria-current={value === option.value ? "page" : undefined}
-          className={`-mb-px cursor-pointer border-x-0 border-t-0 border-b-2 bg-transparent px-0.5 pb-2.5 text-[13px] font-bold transition-colors ${
+          // Flex, so a label with a dot or badge in it centres on the same
+          // line as a plain word instead of sitting on the dot's baseline.
+          className={`-mb-px flex cursor-pointer items-center border-x-0 border-t-0 border-b-2 bg-transparent px-0.5 pb-2.5 text-[13px] font-bold transition-colors ${
             value === option.value
               ? "border-brand-500 text-brand-500"
               : "border-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"

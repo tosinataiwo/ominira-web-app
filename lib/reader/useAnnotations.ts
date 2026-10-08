@@ -44,7 +44,7 @@ export function useAnnotations(materialId: string) {
   // Every Annotation in the material, deduped by id (a multi-passage
   // annotation lands in more than one passage's bucket, same object
   // reference) — for the book-wide annotation feed, not per-passage
-  // rendering (see useBookAnnotationFeed).
+  // rendering (see useFeed).
   const allAnnotations = useMemo(() => {
     const byId = new Map<string, Annotation>();
     for (const list of Object.values(annotationsByPassage)) {

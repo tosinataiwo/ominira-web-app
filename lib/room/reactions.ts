@@ -43,12 +43,12 @@ export function addToBurst(
 /** What the most-used reaction says: about the speaker's point, or with
  * nobody speaking. `{point}` is "Ada's point", `{who}` is "Ada". */
 const DIGEST_PHRASES: Record<RoomReaction, { speaker: string; alone: string }> = {
-  "👏": { speaker: "applauded {point}", alone: "applauded" },
+  "👏🏾": { speaker: "applauded {point}", alone: "applauded" },
   "❤️": { speaker: "loved {point}", alone: "loved this" },
   "💡": { speaker: "found insight in {point}", alone: "found insight here" },
   "🤔": { speaker: "pondered {point}", alone: "pondered this" },
   "😮": { speaker: "gasped at {point}", alone: "gasped" },
-  "🙏": { speaker: "thanked {who}", alone: "gave thanks" },
+  "🙏🏾": { speaker: "thanked {who}", alone: "gave thanks" },
   "✊🏾": { speaker: "stood with {who}", alone: "stood in solidarity" },
 };
 

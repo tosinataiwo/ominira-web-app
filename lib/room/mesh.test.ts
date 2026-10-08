@@ -12,6 +12,7 @@ const member = (sessionId: string, sends = false): RoomPresence => ({
   sends,
   micOnAt: null,
   handRaisedAt: null,
+  readingAloud: null,
   followingId: null,
   progressPct: 0,
   mode: "read",

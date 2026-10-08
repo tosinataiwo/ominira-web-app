@@ -6,12 +6,8 @@ import type { Section } from "@/lib/book/schema";
 import { useReaderStore } from "@/stores/reader-store";
 import Tooltip from "./Tooltip";
 import ChapterPill from "./ChapterPill";
-import StartRoomButton from "@/app/components/room/StartRoomButton";
 
 type Props = {
-  /** The material on screen; drives "Start a room" (reading-room-spec.md),
-   * shown only where a room can start. */
-  materialId: string;
   visible?: boolean;
   topBarHeightPx: number;
   railInsetPx: number;
@@ -25,13 +21,8 @@ type Props = {
    * always X and a standalone page is always back, regardless of viewport. */
   onClose?: () => void;
   /** No listen button at all when there's nothing to narrate — not even a
-   * disabled one. Omitted (not just false) for PDF/DOCX/webpage: none of
-   * those three formats have any audio pipeline at all (no spine tracks,
-   * no live AI-narration fallback), so there's nothing a Play button could
-   * actually start — adding one anyway would be dead UI. For EPUB this is
-   * otherwise always true in practice: NarrationEngine falls back to live,
-   * on-demand AI narration for any section without a prerecorded track, so
-   * this isn't gated on one existing. */
+   * disabled one. Every format narrates through the one NarrationEngine
+   * (live AI narration); this is false only when there's no text to read. */
   canListen?: boolean;
   /** While true, the button below is hidden entirely rather than turned
    * into a play/pause toggle — the persistent player (NowPlayingBar) is
@@ -93,17 +84,13 @@ const iconButtonClass =
  *
  * The fuller type/layout config menu (font size, spacing, width, family)
  * that used to live behind a "Settings" popover here is shelved for now in
- * favor of this plain sun/moon toggle — those settings stay at their
- * defaults until a proper settings module replaces this, and every format
- * reads the same reader-store values for its own typography (see
- * lib/reader/useArticleTypographyStyle.ts for the non-EPUB formats' side of
- * that), so a future settings UI written once here applies everywhere for
- * free. Same show/hide-on-scroll/click lifecycle as EPUB always had
+ * favor of this plain sun/moon toggle. Typography is set in
+ * stores/reader-store.ts (DEFAULT_TYPOGRAPHY / setTypography), which every
+ * format reads, so a future settings UI can drive it from here. Same show/hide-on-scroll/click lifecycle as EPUB always had
  * (`visible`, default true for formats with no such scroll-driven chrome
  * of their own yet).
  */
 export default function ReaderHeader({
-  materialId,
   visible = true,
   topBarHeightPx,
   railInsetPx,
@@ -195,8 +182,6 @@ export default function ReaderHeader({
         )}
 
         {children}
-
-        <StartRoomButton materialId={materialId} className={iconButtonClass} />
 
         {canListen && !isListen && onListen && (
           <Tooltip label="Listen to this book" side="bottom">

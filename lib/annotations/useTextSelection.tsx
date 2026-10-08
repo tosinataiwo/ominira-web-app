@@ -69,6 +69,7 @@ export function useTextSelection({
   active,
   onSelect,
   layoutKey,
+  beneath = false,
 }: {
   /** The element gestures are read from — the reading surface itself. */
   root: HTMLElement | null;
@@ -81,6 +82,12 @@ export function useTextSelection({
   /** Changes whenever the surface's layout moves without the scroll container
    * resizing (a PDF zoom, a font-size change) — re-measures the overlay. */
   layoutKey?: unknown;
+  /** Paint the wash behind the text, like a saved highlight, instead of
+   * multiplying it over the top. For DOM text, whose `scrollEl` must be
+   * `isolate` so "behind" stops at its background. Over the top is only for
+   * an opaque page (PDF) — and leans on mix-blend-mode, which mobile WebKit
+   * drops for layers inside a scroller, painting the ink over in yellow. */
+  beneath?: boolean;
 }): ReactNode {
   // The selection and its drawing, measured together: every change to the
   // selection happens in an event handler, which measures it there and then.
@@ -487,7 +494,11 @@ export function useTextSelection({
   const first = boxes[0];
   const last = boxes[boxes.length - 1];
   return createPortal(
-    <div aria-hidden="true" className="reader-selection-layer pointer-events-none absolute left-0 top-0 z-[5]" style={{ width: 0, height: 0 }}>
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute left-0 top-0 ${beneath ? "z-[-1]" : "reader-selection-layer z-[5]"}`}
+      style={{ width: 0, height: 0 }}
+    >
       {boxes.map((b, i) => (
         <div key={i} className="absolute" style={{ ...b, background: "var(--reader-highlight)", borderRadius: 2 }} />
       ))}

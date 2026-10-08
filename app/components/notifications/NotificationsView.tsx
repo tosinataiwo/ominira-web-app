@@ -162,7 +162,7 @@ function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread:
           )}
         </span>
         {detail && (
-          <span className="line-clamp-2 font-literata text-[14px] italic leading-[1.65] text-[var(--reader-text-muted)]">
+          <span className="line-clamp-2 font-serif text-[14px] leading-[1.65] text-[var(--reader-text-muted)]">
             {detail}
           </span>
         )}
@@ -239,7 +239,7 @@ export default function NotificationsView() {
       {/* Same heading treatment as Home's "Community posts", and the same
           reading column the feed uses — a notification line is the same kind
           of text, and full page width left it stranded. */}
-      <h1 className="mt-1 mb-6 font-serif text-xl font-bold text-[var(--reader-text)]">Notifications</h1>
+      <h1 className="font-serif type-3 text-balance mt-1 mb-6 text-[var(--reader-text)]">Notifications</h1>
 
       <div className="">
         {!isAuthenticated ? (

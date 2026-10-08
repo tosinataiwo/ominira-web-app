@@ -5,11 +5,14 @@ import { useAudioStore } from "@/stores/audio-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useNarrationStore } from "@/stores/narration-store";
 import { buildPassageIndex, buildSectionsById } from "@/lib/reader/sections";
-import { buildEpubScale, locatorOfKind, locatorPercent, type Locator } from "@/lib/reader/locator";
-import { hasNarratableText } from "@/lib/audio/narrationText";
+import { locatorPercent } from "@/lib/reader/locator";
+import { listenLocator, locatorPlace, narrationScale } from "@/lib/audio/narrationDocument";
+import { chunkWordOffsets, hasNarratableText } from "@/lib/audio/narrationText";
 import { buildNarrationIndex, type NarrationTarget } from "@/lib/audio/narrationIndex";
 import { createNarrationQueue, type NarrationQueue } from "@/lib/audio/narrationQueue";
 import { ensureClip, touchClip, useLiveClip } from "@/lib/audio/liveNarrationCache";
+import { registerNarrationElement } from "@/lib/audio/narrationTap";
+import { activeWordIndex, type KaraokeWord } from "@/lib/audio/karaoke";
 import type { Passage, Section } from "@/lib/book/schema";
 
 // HTMLMediaElement's own time-stretching (what playbackRate drives) can run
@@ -110,7 +113,7 @@ export default function NarrationEngine() {
   const passageIndex = useMemo(() => (book ? buildPassageIndex(book.sections) : new Map()), [book]);
   const passageById = useCallback((id: string): Passage | undefined => passageIndex.get(id)?.passage, [passageIndex]);
   const narrationIndex = useMemo(() => (book ? buildNarrationIndex(book) : undefined), [book]);
-  const progressScale = useMemo(() => (book ? buildEpubScale(book) : undefined), [book]);
+  const progressScale = useMemo(() => (book ? narrationScale(book) : undefined), [book]);
   /**
    * Records where listening has got to, in the same one-record-per-material
    * shape plain reading writes (stores/reading-position-store.ts) — so the
@@ -126,8 +129,8 @@ export default function NarrationEngine() {
    */
   const persistListenPosition = useCallback(
     (sectionId: string, passageIndex: number, audioTimeMs: number) => {
-      if (!materialId) return;
-      const locator: Locator = { kind: "epub", sectionId, passageIndex };
+      if (!materialId || !book) return;
+      const locator = listenLocator(book, sectionId, passageIndex);
       setPosition(materialId, {
         locator,
         mode: "listen",
@@ -135,7 +138,7 @@ export default function NarrationEngine() {
         progressPercent: locatorPercent(progressScale, locator),
       });
     },
-    [materialId, setPosition, progressScale]
+    [materialId, book, setPosition, progressScale]
   );
 
   // The one piece of state everything else in this file is derived from or
@@ -217,6 +220,8 @@ export default function NarrationEngine() {
     // differ from whatever's still in the ref, and the src-swap effect
     // below picks it up on its own regular comparison.
     useAudioStore.getState().seekTo(0);
+    // No word until the next clip plays (see publishWord).
+    useNarrationStore.setState({ currentWord: null });
   }, []);
 
   // Bumped once per *explicit* jump — a reader-initiated section/passage
@@ -297,26 +302,26 @@ export default function NarrationEngine() {
     const bookKey = `${book.slug}:${materialId}`;
     if (resumeResolvedForRef.current === bookKey) return;
     if (!narrationIndex) return;
-    // Only an EPUB locator can name a passage to resume narration from; a
-    // position saved by another format's viewer is simply not addressable
-    // here, and falls through to the book's first narratable passage below.
-    const stored = locatorOfKind(getPosition(materialId)?.locator, "epub");
-    const storedSection = stored ? sectionsById.get(stored.sectionId) : undefined;
-    const storedPassage = storedSection?.passages[stored?.passageIndex ?? -1];
-    // Falls back to the book's actual first narratable passage — not
-    // narrationIndex.firstOf(book.spine[0]), which returns undefined
-    // outright whenever the spine's literal first section has nothing
+    // Resumes from the saved position — listening's, or wherever plain
+    // reading left off — at the first narratable passage from there in its
+    // section (a saved heading image, say, moves on to the text after it).
+    // A position saved in another format's terms, or one with nothing
+    // narratable after it, falls back to the book's actual first narratable
+    // passage — not narrationIndex.firstOf(book.spine[0]), which returns
+    // undefined whenever the spine's literal first section has nothing
     // narratable in it (a cover-image-only section is common as spine[0]).
-    // targets[0] is the flat index's own first entry, already resolved
-    // past any such leading non-narratable section(s); using firstOf here
-    // used to mean a book with an image-only cover page never started
-    // narrating at all on a fresh open — no target ever got set, so every
-    // control downstream of isNarrating (chapter-skip included) looked
-    // permanently dead.
+    const place = locatorPlace(book, getPosition(materialId)?.locator);
+    const placeSection = place ? sectionsById.get(place.sectionId) : undefined;
+    const resumePassage = placeSection?.passages.slice(Math.max(0, place!.passageIndex)).find(hasNarratableText);
+    // Nothing narratable left in that section (an image-only PDF page, say):
+    // the first narratable passage of a later section.
+    const placeOrder = place ? book.spine.indexOf(place.sectionId) : -1;
+    const spineOrder = new Map(book.spine.map((id, i) => [id, i]));
     const resumeTarget: NarrationTarget | undefined =
-      storedSection && storedPassage && hasNarratableText(storedPassage)
-        ? { sectionId: storedSection.id, passageId: storedPassage.id, chunkIndex: 0 }
-        : narrationIndex.targets[0];
+      placeSection && resumePassage
+        ? { sectionId: placeSection.id, passageId: resumePassage.id, chunkIndex: 0 }
+        : (placeOrder >= 0 ? narrationIndex.targets.find((t) => (spineOrder.get(t.sectionId) ?? -1) > placeOrder) : undefined) ??
+          narrationIndex.targets[0];
     // Nothing narratable loaded yet (progressive loading still catching
     // up) — leave resumeResolvedForRef untouched so the next narrationIndex
     // recompute (more content arriving) gets a real shot at this too,
@@ -380,6 +385,8 @@ export default function NarrationEngine() {
   useEffect(() => {
     const audio = new Audio();
     audioElRef.current = audio;
+    // For a reading room to send the narration (narrationTap.ts).
+    registerNarrationElement(audio);
 
     // Keeps the play/pause icon in sync with the *real* element instead of
     // only the store — an OS/keyboard media key (or another tab's media
@@ -408,6 +415,7 @@ export default function NarrationEngine() {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audioElRef.current = null;
+      registerNarrationElement(null);
     };
   }, []);
 
@@ -511,6 +519,25 @@ export default function NarrationEngine() {
     else audio.pause();
   }, [isNarrating, audioPlaying]);
 
+  // The word being read, worked out here and nowhere else: from the element's
+  // own time, against the words of the clip it is actually playing (matched
+  // by src). Reading the store's time against the store's words instead
+  // flashed the previous passage's first word at every switch: the time
+  // resets to 0 at once, while the old words stay until the next clip's
+  // arrive — and a room speaker broadcast that flash to every listener.
+  const liveClipRef = useRef<{ src: string | undefined; words: KaraokeWord[] }>({ src: undefined, words: [] });
+  useEffect(() => {
+    liveClipRef.current = { src: live.src, words: live.words };
+  }, [live.src, live.words]);
+  const publishWord = useCallback((audio: HTMLAudioElement) => {
+    const { src, words } = liveClipRef.current;
+    if (!src || audio.src !== src || words.length === 0) return;
+    const word = words[activeWordIndex(words, audio.currentTime * 1000)];
+    const current = useNarrationStore.getState().currentWord;
+    if (current?.passageId === word.passageId && current.index === word.index) return;
+    useNarrationStore.setState({ currentWord: { passageId: word.passageId, index: word.index } });
+  }, []);
+
   // Keeps the shared playback clock in sync with the real element as it
   // plays.
   useEffect(() => {
@@ -518,6 +545,7 @@ export default function NarrationEngine() {
     if (!audio || !isNarrating) return;
     const onTimeUpdate = () => {
       useAudioStore.getState().seekTo(audio.currentTime * 1000);
+      publishWord(audio);
       // Drives the lock-screen/Control Center scrub bar and elapsed-time
       // display — without it the OS media UI still shows play/pause but no
       // progress, since it has no other way to know where in the track the
@@ -538,7 +566,7 @@ export default function NarrationEngine() {
     };
     audio.addEventListener("timeupdate", onTimeUpdate);
     return () => audio.removeEventListener("timeupdate", onTimeUpdate);
-  }, [isNarrating, activeDurationMs]);
+  }, [isNarrating, activeDurationMs, publishWord]);
 
   // Lock-screen / Control Center / Bluetooth-headset controls — the same
   // surface a podcast app gets, including while the screen is locked or the
@@ -595,10 +623,11 @@ export default function NarrationEngine() {
         ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
         canvas.toBlob(resolve, "image/jpeg", 0.92);
       });
-    (async () => {
+    const cover = book.metadata.cover;
+    if (cover) (async () => {
       let sourceUrl: string;
       try {
-        const res = await fetch(book.metadata.cover);
+        const res = await fetch(cover);
         const blob = await res.blob();
         sourceUrl = URL.createObjectURL(blob);
       } catch {
@@ -671,18 +700,34 @@ export default function NarrationEngine() {
   }, [book?.id, materialId, isNarrating, currentPlayingPassageId, audioSection?.id]);
 
   // Click-a-passage-to-narrate-from-there — a no-op only when the passage
-  // itself has nothing narratable at all (an image, a table, ...). Always
-  // starts at that passage's first chunk, same as any other passage-
-  // level entry point (resume, chapter-skip).
+  // itself has nothing narratable at all (an image, a table, ...). Starts at
+  // the passage's first chunk, or, given a word ("listen from here" on a
+  // selection), at the chunk holding it, then seeks to that word once the
+  // clip is in (pendingWordSeekRef).
+  const pendingWordSeekRef = useRef<{ passageId: string; chunkIndex: number; wordIndex: number } | undefined>(undefined);
   const seekToPassageForListening = useCallback(
-    (sectionId: string, passageId: string) => {
+    (sectionId: string, passageId: string, wordIndex?: number) => {
       const passage = passageById(passageId);
       if (!passage || !hasNarratableText(passage)) return;
-      requestTarget({ sectionId, passageId, chunkIndex: 0 }, { explicit: true });
+      const offsets = chunkWordOffsets(passage);
+      const chunkIndex = wordIndex === undefined ? 0 : Math.max(0, offsets.findLastIndex((o) => o <= wordIndex));
+      requestTarget({ sectionId, passageId, chunkIndex }, { explicit: true });
+      pendingWordSeekRef.current = wordIndex ? { passageId, chunkIndex, wordIndex } : undefined;
       useAudioStore.getState().play();
     },
     [passageById, requestTarget]
   );
+  useEffect(() => {
+    const pending = pendingWordSeekRef.current;
+    if (!pending || live.status !== "ready" || !activeSrc) return;
+    if (target?.passageId !== pending.passageId || target.chunkIndex !== pending.chunkIndex) {
+      pendingWordSeekRef.current = undefined; // moved on before it loaded
+      return;
+    }
+    pendingWordSeekRef.current = undefined;
+    const word = live.words.find((w) => w.index >= pending.wordIndex);
+    if (word) seekAudio(word.startMs);
+  }, [live.status, live.words, activeSrc, target, seekAudio]);
 
   // A paragraph can be selected before this engine has switched over to its
   // book. Consume that one-shot intent only once the real passage index is
@@ -692,7 +737,7 @@ export default function NarrationEngine() {
     const passage = passageById(startAtPassage.passageId);
     if (!passage || !hasNarratableText(passage)) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes an external one-shot playback command.
-    seekToPassageForListening(startAtPassage.sectionId, startAtPassage.passageId);
+    seekToPassageForListening(startAtPassage.sectionId, startAtPassage.passageId, startAtPassage.wordIndex);
     useAudioStore.getState().clearStartAtPassage();
   }, [book?.id, passageById, seekToPassageForListening, startAtPassage]);
 
@@ -779,7 +824,6 @@ export default function NarrationEngine() {
     useNarrationStore.setState({
       audioSection,
       currentPlayingPassageId,
-      currentWords: live.words,
       audioIndex,
       canSkipToPrevSection,
       canSkipToNextSection,
@@ -789,7 +833,6 @@ export default function NarrationEngine() {
   }, [
     audioSection,
     currentPlayingPassageId,
-    live.words,
     audioIndex,
     canSkipToPrevSection,
     canSkipToNextSection,

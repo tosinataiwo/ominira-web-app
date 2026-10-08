@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { Section } from "@/lib/book/schema";
-import type { KaraokeWord } from "@/lib/audio/karaoke";
 
 /**
  * Derived narration state for whichever book is currently playing
@@ -15,18 +14,12 @@ import type { KaraokeWord } from "@/lib/audio/karaoke";
  */
 type NarrationState = {
   audioSection: Section | undefined;
-  /** Which passage is currently being narrated — Reader.tsx uses this,
-   * together with `currentWords` below, to find the exact [data-word-index]
-   * span to mark om-narrating-word (globals.css) within that passage's
-   * [data-passage-id] element. */
+  /** Which passage is currently being narrated. */
   currentPlayingPassageId: string | undefined;
-  /** Word-level timings for whichever clip currentPlayingPassageId points
-   * at (live.words in NarrationEngine) — empty until that clip has actually
-   * finished synthesizing. Reader.tsx scans this against currentTimeMs
-   * every tick to find the one [data-word-index] span to mark
-   * om-narrating-word; see that effect's own comment on why this has to be
-   * imperative DOM rather than a prop threaded into PassageText. */
-  currentWords: KaraokeWord[];
+  /** The word being read now (KaraokeWord.index in its passage), from the
+   * clip actually playing; null between clips. NarrationEngine is its only
+   * writer — every word highlight, and a room speaker's broadcast, read it. */
+  currentWord: { passageId: string; index: number } | null;
   /** Spine index of the section currently narrating, -1 when nothing is
    * playing. Reader compares this against its own carousel activeIndex to
    * decide whether it's "following along". */
@@ -57,7 +50,8 @@ type NarrationState = {
    * call sites each independently moving the carousel. */
   explicitJumpSeq: number;
 
-  seekToPassageForListening: (sectionId: string, passageId: string) => void;
+  /** `wordIndex`: start from that word of the passage (KaraokeWord.index). */
+  seekToPassageForListening: (sectionId: string, passageId: string, wordIndex?: number) => void;
   skipToPrevSection: () => void;
   skipToNextSection: () => void;
   /** Jumps narration straight to any section (not just an adjacent one) —
@@ -70,7 +64,7 @@ type NarrationState = {
 export const useNarrationStore = create<NarrationState>(() => ({
   audioSection: undefined,
   currentPlayingPassageId: undefined,
-  currentWords: [],
+  currentWord: null,
   audioIndex: -1,
   canSkipToPrevSection: false,
   canSkipToNextSection: false,

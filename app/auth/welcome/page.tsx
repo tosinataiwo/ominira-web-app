@@ -23,7 +23,7 @@ export default function WelcomePage() {
       >
         <SunriseMark theme="dark" className="w-full" />
         <div className="flex-1">
-          <h1 className="font-serif text-4xl leading-tight font-semibold">
+          <h1 className="font-serif type-1 text-balance">
             You&rsquo;re in,
             <br />
             {pseudonym}.
@@ -44,7 +44,7 @@ export default function WelcomePage() {
       <div className="hidden min-h-screen flex-col bg-[var(--reader-bg)] px-16 py-16 shell:flex xl:px-24">
         <Wordmark />
         <div className="flex flex-1 flex-col items-center justify-center text-center">
-          <h1 className="font-serif text-4xl font-semibold text-[var(--reader-text)]">You&rsquo;re in, Comrade.</h1>
+          <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">You&rsquo;re in, Comrade.</h1>
           <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-[var(--reader-text-muted)]">
             Every comrade deepens the well of our collective consciousness. The movement grows with you.
           </p>

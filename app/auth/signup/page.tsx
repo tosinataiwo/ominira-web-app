@@ -144,10 +144,10 @@ export default function SignupPage() {
         {current === "form-account" && (
           <div className="shell:contents">
             <div>
-              <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
+              <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
                 Let&rsquo;s get you started, <br></br> Comrade.
               </h1>
-              <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
+              <p className="mt-3 text-[14px] font-medium text-[var(--reader-text-muted)]">
                 Enter your details below to create your account. <br></br> Use a fake identity if you have to.
               </p>
             </div>
@@ -186,7 +186,7 @@ export default function SignupPage() {
                   Continue
                 </AuthButton>
               </form>
-              <p className="hidden text-[14px] text-[var(--reader-text-muted)] shell:block">
+              <p className="hidden text-[14px] font-medium text-[var(--reader-text-muted)] shell:block">
                 Already have an account?{" "}
                 <Link href="/auth/login" className="font-bold text-brand-500 no-underline">
                   Log in
@@ -198,7 +198,7 @@ export default function SignupPage() {
 
         {current === "form-pseudonym" && (
           <div className="shell:contents">
-            <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
+            <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
               Choose the name your comrades will know you by — this is what others see, never your full name.
             </h1>
             <div className="mt-8 w-full max-w-sm space-y-5 shell:mt-0 shell:justify-self-center">
@@ -222,11 +222,11 @@ export default function SignupPage() {
         {current === "form-location" && (
           <div className="shell:contents">
             <div>
-              <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
+              <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
                 Where are you studying from?
               </h1>
               <div className="mt-6 flex gap-3">
-                <p className="font-literata text-[14px] leading-relaxed text-[var(--reader-text-muted)]">
+                <p className="text-[14px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
                   We don&rsquo;t track your location. We only ask for your city and country so that we can show comrades that they&rsquo;re studying with other Africans from across the globe.
                 </p>
               </div>

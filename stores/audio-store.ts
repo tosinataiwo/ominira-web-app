@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BookDocument } from "@/lib/book/schema";
+import type { NarrationDocument } from "@/lib/audio/narrationDocument";
 import { DEFAULT_VOICE_ID } from "@/lib/audio/voices";
 
 /**
@@ -26,7 +26,7 @@ type AudioState = {
    * reads this to reserve bottom space and to position the "back to
    * narration" nudge, without owning the player's DOM itself anymore. */
   playerHeight: number;
-  book: BookDocument | null;
+  book: NarrationDocument | null;
   /** The same book's real `materials.id` (UUID) — kept alongside `book`
    * rather than derived from it, since `book.id` is ingestion's own
    * slug-like internal id (api-spec.md: deliberately distinct from
@@ -34,7 +34,7 @@ type AudioState = {
    * this, not `book.id`. */
   materialId: string | null;
   /** A paragraph picked before the narration engine has received this book. */
-  startAtPassage: { bookId: string; sectionId: string; passageId: string } | null;
+  startAtPassage: { bookId: string; sectionId: string; passageId: string; wordIndex?: number } | null;
 
   play: () => void;
   pause: () => void;
@@ -46,8 +46,14 @@ type AudioState = {
   /** Starts (or switches) listen mode to this book and begins playback —
    * the engine's own resume-position effect immediately reconciles
    * currentTimeMs against whatever was last saved for it. */
-  openBook: (book: BookDocument, materialId: string) => void;
-  openBookAtPassage: (book: BookDocument, materialId: string, sectionId: string, passageId: string) => void;
+  openBook: (book: NarrationDocument, materialId: string) => void;
+  openBookAtPassage: (
+    book: NarrationDocument,
+    materialId: string,
+    sectionId: string,
+    passageId: string,
+    wordIndex?: number
+  ) => void;
   clearStartAtPassage: () => void;
   /** Keeps `book` in sync as more of it arrives — Reader.tsx's own prose
    * loads progressively (see useProgressiveText's doc comment: every
@@ -61,7 +67,7 @@ type AudioState = {
    * itself is already showing real prose for it. A no-op if `book` isn't
    * the one currently playing (stale call from a book the reader has since
    * navigated away from/closed listen mode for). */
-  updateBookContent: (book: BookDocument) => void;
+  updateBookContent: (book: NarrationDocument) => void;
   /** Exits listen mode entirely — resume position is left untouched in
    * reading-position-store, so reopening the book later picks up where
    * playback left off instead of restarting. */
@@ -93,13 +99,13 @@ export const useAudioStore = create<AudioState>()(
       setSpeed: (speed) => set({ speed }),
       setPlayerHeight: (playerHeight) => set({ playerHeight }),
       openBook: (book, materialId) => set({ book, materialId, currentTimeMs: 0, isPlaying: true }),
-      openBookAtPassage: (book, materialId, sectionId, passageId) =>
+      openBookAtPassage: (book, materialId, sectionId, passageId, wordIndex) =>
         set({
           book,
           materialId,
           currentTimeMs: 0,
           isPlaying: true,
-          startAtPassage: { bookId: book.id, sectionId, passageId },
+          startAtPassage: { bookId: book.id, sectionId, passageId, wordIndex },
         }),
       clearStartAtPassage: () => set({ startAtPassage: null }),
       updateBookContent: (book) => set((s) => (s.book && s.book.id === book.id ? { book } : {})),

@@ -40,7 +40,7 @@ describe("parseEvent", () => {
   });
 
   test("reaction accepts only the seven", () => {
-    expect(parseEvent("reaction", { from: ADA, emojis: ["👏", "✊🏾"] })).not.toBeNull();
+    expect(parseEvent("reaction", { from: ADA, emojis: ["👏🏾", "✊🏾"] })).not.toBeNull();
     expect(parseEvent("reaction", { from: ADA, emojis: ["🔥"] })).toBeNull();
     expect(parseEvent("reaction", { from: ADA, emojis: [] })).toBeNull();
   });
@@ -66,6 +66,7 @@ describe("parsePresence", () => {
     sends: false,
     micOnAt: null,
     handRaisedAt: null,
+    readingAloud: null,
     followingId: null,
     progressPct: 12.5,
     mode: "read",
@@ -148,7 +149,7 @@ describe("gate", () => {
   test("reaction merge keeps the newest ten taps", () => {
     const limit = RATE_LIMITS.reaction!;
     if (limit.overflow !== "merge") throw new Error("reaction should merge");
-    const held: RoomEvent<"reaction"> = { from: ADA, emojis: Array(8).fill("👏") };
+    const held: RoomEvent<"reaction"> = { from: ADA, emojis: Array(8).fill("👏🏾") };
     const merged = limit.merge(held, { from: ADA, emojis: ["❤️", "💡", "🤔"] });
     expect(merged.emojis).toHaveLength(10);
     expect(merged.emojis.slice(-3)).toEqual(["❤️", "💡", "🤔"]);

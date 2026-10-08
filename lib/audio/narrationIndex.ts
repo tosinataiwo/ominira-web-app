@@ -1,4 +1,4 @@
-import type { BookDocument } from "@/lib/book/schema";
+import type { NarrationDocument } from "@/lib/audio/narrationDocument";
 import { hasNarratableText, passageChunkTexts } from "@/lib/audio/narrationText";
 import { buildSectionsById } from "@/lib/reader/sections";
 
@@ -40,7 +40,7 @@ export type BookNarrationIndex = {
   firstOf(sectionId: string): NarrationTarget | undefined;
 };
 
-export function buildNarrationIndex(book: BookDocument): BookNarrationIndex {
+export function buildNarrationIndex(book: NarrationDocument): BookNarrationIndex {
   const targets: NarrationTarget[] = [];
   const sectionStart = new Map<string, number>();
   // Sections can be nested under Part groupings (book.sections is the

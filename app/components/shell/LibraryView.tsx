@@ -146,7 +146,7 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
       {view === "mine" ? (
         <>
           <div className="mb-7 flex items-baseline justify-between gap-3">
-            <h1 className="m-0 font-serif text-[26px] font-bold text-[var(--reader-text)]">Personal</h1>
+            <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">Personal</h1>
             {canUpload && (
               <button
                 type="button"
@@ -204,7 +204,7 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
         </>
       ) : (
         <>
-          <h1 className="m-0 font-serif text-[26px] font-bold text-[var(--reader-text)]">{category}</h1>
+          <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">{category}</h1>
           <p className="mb-5 text-[13px] font-semibold text-[var(--reader-text-muted)]">
             {contributionStats.bookCount} {contributionStats.bookCount === 1 ? "book" : "books"}
           </p>

@@ -3,7 +3,7 @@ import { CHAT_EMPTY, MAX_CHAT_ITEMS, addChatItem, clipQuote, createChat, remembe
 import { MAX_QUOTE_LENGTH, type RoomPresence } from "./events";
 
 const message = (readerId: string, text = "hi"): ChatItem => ({ kind: "message", id: text, readerId, text, at: 1 });
-const digest: ChatItem = { kind: "digest", id: "d", at: 1, text: "2 comrades applauded", emojis: ["👏"] };
+const digest: ChatItem = { kind: "digest", id: "d", at: 1, text: "2 comrades applauded", emojis: ["👏🏾"] };
 
 const member = (readerId: string, name = readerId): RoomPresence => ({
   readerId,
@@ -15,6 +15,7 @@ const member = (readerId: string, name = readerId): RoomPresence => ({
   sends: false,
   micOnAt: null,
   handRaisedAt: null,
+  readingAloud: null,
   followingId: null,
   progressPct: 0,
   mode: "read",

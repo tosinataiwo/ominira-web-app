@@ -23,11 +23,6 @@ import { useSessionStore } from "@/stores/session-store";
 type RoomState = {
   snapshot: RoomSnapshot | null;
   session: RoomSession | null;
-  /** The room panel (sheet on mobile, side panel on desktop). */
-  panelOpen: boolean;
-  /** A section to bring into view as the panel opens ("N reading" → Listening). */
-  panelSection: "listening" | null;
-  setPanelOpen: (open: boolean, section?: "listening") => void;
   view: ReaderView | null;
   selection: readonly AnnotationRange[] | null;
   setView: (view: ReaderView | null) => void;
@@ -73,7 +68,7 @@ export const activeRoom = (s: { snapshot: RoomSnapshot | null }) =>
   s.snapshot && !s.snapshot.ended && !s.snapshot.elsewhere ? s.snapshot : null;
 
 /** Unread room chat when you're in the room on this book, else null: the
- * notes rail's Room chat tab and its badge (spec §1.4). */
+ * feed panel's Room tab and the rail's room button (spec §1.4). */
 export const roomChatUnread = (s: { snapshot: RoomSnapshot | null }, materialId: string) => {
   const room = activeRoom(s);
   return room?.room.materialId === materialId ? room.chat.unread : null;
@@ -117,9 +112,6 @@ export const useRoomStore = create<RoomState>()((set, get) => {
   return {
     snapshot: null,
     session: null,
-    panelOpen: false,
-    panelSection: null,
-    setPanelOpen: (panelOpen, section) => set({ panelOpen, panelSection: section ?? null }),
     view: null,
     selection: null,
     setView: (view) => {
@@ -139,7 +131,7 @@ export const useRoomStore = create<RoomState>()((set, get) => {
     leave: async () => {
       const session = get().session;
       if (session) remember(null);
-      set({ session: null, snapshot: null, panelOpen: false, passage: null });
+      set({ session: null, snapshot: null, passage: null });
       await session?.leave();
     },
     resume: async () => {

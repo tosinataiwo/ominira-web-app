@@ -22,9 +22,11 @@ import { ensureClip, peekClip, subscribeClip } from "@/lib/audio/liveNarrationCa
  * what read as "more noticeable lag between passages." 45s splits the
  * difference — still meaningfully less buffered than the original 60s,
  * without cutting so close to real-time that ordinary playback catches up
- * to a still-synthesizing chunk.
+ * to a still-synthesizing chunk. Back at 60s now the runway no longer
+ * counts the clip that's playing; memory stays bounded by
+ * MAX_CACHED_CLIPS, not by this.
  */
-const RUNWAY_MS = 45_000;
+const RUNWAY_MS = 60_000;
 
 export type NarrationQueue = {
   /**
@@ -130,7 +132,10 @@ export function createNarrationQueue(
     while (target && stepsLeft-- > 0) {
       const clip = peekClip(bookSlug, target.passageId, target.chunkIndex, voice);
       if (clip?.status === "ready") {
-        bufferedMs += clip.durationMs;
+        // The runway is lead *beyond* what's playing: counting the current
+        // clip too let one long chunk (a split passage's first ~60s) fill
+        // it alone, so the next chunk wasn't asked for until this one ended.
+        if (target !== currentTarget) bufferedMs += clip.durationMs;
         target = index.next(target);
         frontier = target;
         if (bufferedMs >= RUNWAY_MS) return;

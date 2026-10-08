@@ -50,7 +50,7 @@ export default function ShelfAuthPrompt() {
         </div>
 
         <div className="flex flex-col items-center gap-1.5">
-          {/* <h2 className="m-0 font-serif text-xl font-bold text-[var(--reader-text)] sm:text-2xl">
+          {/* <h2 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)] sm:">
             Your reading list is waiting
           </h2> */}
           <p className="m-0 max-w-xs font-bold text-[14px] text-[var(--reader-text-muted)]">

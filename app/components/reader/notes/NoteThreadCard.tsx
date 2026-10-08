@@ -108,7 +108,7 @@ export default function NoteThreadCard({
           Everything else (header/quote, body, attachment, reactions) runs the full
           width below, not indented under the avatar. */}
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
-        <AuthorAvatar name={note.author.pseudonym} avatar={note.author.avatar} />
+        <AuthorAvatar author={note.author} />
         <div className="min-w-0 flex-1">
           <AuthorRow
             name={note.author.pseudonym}
@@ -176,7 +176,6 @@ export default function NoteThreadCard({
             <NoteComposer
               initialText={note.content.kind === "text" ? note.content.text : ""}
               initialVisibility={note.visibility}
-              startCollapsed={false}
               onCancel={() => ui.startEdit(null)}
               onSave={(content, visibility) => {
                 actions.saveEdit(note.id, content, visibility);
@@ -248,8 +247,7 @@ export default function NoteThreadCard({
             <div className="mt-3">
               <NoteComposer
                 initialText=""
-                placeholder={`Reply to ${note.author.pseudonym}…`}
-                startCollapsed={false}
+                placeholder={`Reply to ${note.author.pseudonym}`}
                 showMemberPrompt
                 action="reply"
                 onCancel={() => ui.toggleComposer(note.id)}
@@ -319,8 +317,7 @@ export default function NoteThreadCard({
                     <div className={`mt-3 ${depth === 2 ? "pl-4 sm:pl-6" : "pl-2 sm:pl-4"}`}>
                       <NoteComposer
                         initialText=""
-                        placeholder={`Reply to ${reply.author.pseudonym}…`}
-                        startCollapsed={false}
+                        placeholder={`Reply to ${reply.author.pseudonym}`}
                         showMemberPrompt
                         action="reply"
                         onCancel={() => ui.toggleComposer(reply.id)}

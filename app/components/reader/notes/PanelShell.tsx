@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowLeft, X } from "lucide-react";
+import { useNarrationBarHeight } from "@/app/components/useBottomDock";
+import { useLayoutStore } from "@/stores/layout-store";
 
 // The mobile sheet's height, as a fraction of the viewport — half by
 // default (was a flat 82%, tall enough that the book underneath was barely
@@ -67,7 +69,7 @@ export default function PanelShell({
   bodyClassName?: string;
   /** A pinned row below the scrollable body, bottom-docked like a chat
    * input bar — e.g. the book feed's own "share a thought" composer
-   * (BookAnnotationFeedPanel). Unlike `subheader`, this isn't part of the
+   * (FeedPanel). Unlike `subheader`, this isn't part of the
    * scrolling content at all, so it stays reachable regardless of where
    * the reader has scrolled to and regardless of which tab/filter the body
    * itself currently shows. Safe to dock a real input here now that
@@ -88,6 +90,16 @@ export default function PanelShell({
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const isSheet = panelType ? panelType === "sheet" : isMobile;
+  // In a room, the sheet stands on the mini-player (and whatever it stands
+  // on) rather than covering it: the room's controls stay in reach.
+  const roomPlayerHeight = useLayoutStore((s) => s.roomPlayerHeight);
+  const footerHeight = useLayoutStore((s) => s.readerFooterHeight);
+  const narrationHeight = useNarrationBarHeight();
+  const below = footerHeight + narrationHeight;
+  const sheetClear =
+    isSheet && roomPlayerHeight > 0
+      ? `calc(${roomPlayerHeight + below}px${below === 0 ? " + env(safe-area-inset-bottom)" : ""})`
+      : undefined;
 
   // Fresh per mount (this panel only ever mounts while open), so every open
   // starts back at the collapsed default regardless of where a previous
@@ -140,9 +152,13 @@ export default function PanelShell({
     // should ever intercept a scroll/tap meant for the book content behind
     // it. pointer-events-auto on the actual panel box below restores it.
     <div
-      className={`w-full h-full min-h-dvh box-border relative flex overflow-hidden pointer-events-none ${
-        isSheet ? "justify-center items-end" : side === "left" ? "justify-start items-stretch" : "justify-end items-stretch"
+      // min-h-dvh for the sheet only: the side panel fills its column, which
+      // is shorter than the screen (the chapter footer sits below), and
+      // overflowing it let the reader's resume scroll shift the panel up.
+      className={`w-full h-full box-border relative flex overflow-hidden pointer-events-none ${
+        isSheet ? "min-h-dvh justify-center items-end" : side === "left" ? "justify-start items-stretch" : "justify-end items-stretch"
       }`}
+      style={sheetClear ? { paddingBottom: sheetClear } : undefined}
     >
       <div
         className={`max-w-full bg-[var(--reader-surface)] shadow-lg flex flex-col box-border overflow-hidden flex-none pointer-events-auto ${

@@ -60,7 +60,7 @@ export default function ReplyEntry({
           own root layout — a reply's author gets the same identity
           treatment as a top-level note's, not a scaled-down one. */}
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-        <AuthorAvatar name={reply.author.pseudonym} avatar={reply.author.avatar} />
+        <AuthorAvatar author={reply.author} />
         <div className="min-w-0 flex-1">
           <AuthorRow
             name={reply.author.pseudonym}
@@ -117,7 +117,6 @@ export default function ReplyEntry({
           <NoteComposer
             initialText={reply.content.kind === "text" ? reply.content.text : ""}
             initialVisibility={reply.visibility}
-            startCollapsed={false}
             onCancel={() => ui.startEdit(null)}
             onSave={(content, visibility) => {
               actions.saveEdit(reply.id, content, visibility);

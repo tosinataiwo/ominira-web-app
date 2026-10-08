@@ -14,7 +14,7 @@ import NoteThreadCard from "./NoteThreadCard";
  * reply/edit/delete/react, not a read-only summary, via the same
  * useThreadInteraction hook that panel uses. Which section this excerpt
  * belongs to is the enclosing feed's own label's job (see
- * BookAnnotationFeedPanel), not repeated per card. Every root note's own
+ * FeedPanel), not repeated per card. Every root note's own
  * replies start expanded, the one standard default useThreadInteraction
  * applies everywhere a thread is surfaced. */
 export default function FeedHighlightThread({

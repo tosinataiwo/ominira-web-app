@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users } from "lucide-react";
 import RoomAvatar from "./RoomAvatar";
 import { useDockedHeight } from "@/app/components/useBottomDock";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import { useBand, useFollowing, useMargin, useReadingCount } from "@/lib/room/hooks";
+import { useBand, useFollowing, useMargin } from "@/lib/room/hooks";
 import { spreadLines } from "@/lib/room/margin";
+import { narratorName } from "@/lib/room/presence";
 import type { ReaderView } from "@/lib/room/view";
 import { useReaderStore } from "@/stores/reader-store";
 import { useRoomStore } from "@/stores/room-store";
 
 // The room in the text (spec §3.1, M3, M10 / D3, D7), drawn over the open
-// reader in viewport coordinates: the page frame while following, the
-// quiet margin, the "N reading" chip and the speaker band. Positions come
+// reader in viewport coordinates: the frame round the reader while following, the
+// quiet margin and the speaker band. Positions come
 // from the reader's view (lib/room/view.ts) and are re-read as it scrolls.
 
 /** Below the shell breakpoint: 22px margin avatars and a 6px frame inset. */
@@ -34,9 +34,8 @@ export default function RoomText({ view }: { view: ReaderView }) {
     <>
       <SpeakerBand view={view} area={area} />
       <div data-reader-theme={theme} className="pointer-events-none fixed inset-0 z-[45]">
-        <PageFrame area={area} inset={narrow ? 6 : 8} />
+        <PageFrame left={area.left} right={area.right} inset={narrow ? 6 : 8} />
         <Margin view={view} area={area} size={narrow ? 22 : 26} />
-        <ReadingChip area={area} />
       </div>
     </>
   );
@@ -66,20 +65,16 @@ function useViewFrame(view: ReaderView) {
   }, [view]);
 }
 
-/** 1.5px brand-300 frame while following (M3); it drops once you move away. */
-function PageFrame({ area, inset }: { area: Area; inset: number }) {
+/** 1.5px brand-300 frame while following (M3), round the whole reader:
+ * its full width and the screen's full height. It drops once you move away. */
+function PageFrame({ left, right, inset }: { left: number; right: number; inset: number }) {
   const following = useFollowing();
   if (!following || following.paused) return null;
   return (
     <div
       aria-hidden="true"
       className="absolute rounded-[14px] border-[1.5px] border-brand-300"
-      style={{
-        top: area.top + inset,
-        left: area.left + inset,
-        width: area.right - area.left - inset * 2,
-        height: area.bottom - area.top - inset * 2,
-      }}
+      style={{ top: inset, bottom: inset, left: left + inset, width: right - left - inset * 2 }}
     />
   );
 }
@@ -113,28 +108,11 @@ function Margin({ view, area, size }: { view: ReaderView; area: Area; size: numb
   );
 }
 
-/** Everyone else in the reader, in one chip, top-right; a tap opens Listening. */
-function ReadingChip({ area }: { area: Area }) {
-  const count = useReadingCount();
-  const setPanelOpen = useRoomStore((s) => s.setPanelOpen);
-  if (count === 0) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => setPanelOpen(true, "listening")}
-      className="pointer-events-auto absolute flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 text-xs font-bold text-[var(--reader-text)] shadow-sm hover:bg-[var(--reader-surface-hover)]"
-      style={{ top: area.top + 10, right: window.innerWidth - area.right + 12 }}
-    >
-      <Users size={14} strokeWidth={2} />
-      {count} reading
-    </button>
-  );
-}
-
-/** A speaker's selection as a soft grey band, captioned (spec §3.1). The
- * band is its own layer, multiplied onto the page, so the words show
- * through it (inside another stacking context it would have nothing to
- * blend with). */
+/** A speaker's selection, captioned (spec §3.1), washed exactly like your
+ * own selection: --reader-highlight on a .reader-selection-layer, which
+ * multiplies in light theme and lies flat in dark (globals.css). The
+ * wrapper only carries the theme those rules key off; it's no stacking
+ * context, so the layer still blends with the page. */
 function SpeakerBand({ view, area }: { view: ReaderView; area: Area }) {
   const theme = useReaderStore((s) => s.theme);
   const band = useBand();
@@ -146,24 +124,39 @@ function SpeakerBand({ view, area }: { view: ReaderView; area: Area }) {
   const last = rects[rects.length - 1];
 
   return (
-    <>
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[45] mix-blend-multiply">
+    <div data-reader-theme={theme}>
+      <div aria-hidden="true" className="reader-selection-layer pointer-events-none fixed inset-0 z-[45]">
         {rects.map((r, i) => (
           <div
             key={i}
-            className="absolute rounded-[2px] bg-neutral-200"
-            style={{ top: r.top, left: r.left, width: r.width, height: r.height }}
+            className="absolute"
+            style={{
+              top: r.top,
+              left: r.left,
+              width: r.width,
+              height: r.height,
+              background: "var(--reader-highlight)",
+              borderRadius: 2,
+            }}
           />
         ))}
       </div>
       <p
-        data-reader-theme={theme}
         className="pointer-events-none fixed z-[45] max-w-[min(320px,80vw)] truncate rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] px-2.5 py-0.5 text-xs text-[var(--reader-text-muted)] shadow-sm"
         style={{ top: captionAbove ? first.top - 26 : last.bottom + 4, left: Math.max(area.left + 8, first.left) }}
       >
-        <strong className="font-bold text-[var(--reader-text)]">{comradeName(band.member.name)}</strong> is speaking
-        from this passage
+        {narratorName(band.member) ? (
+          <>
+            {narratorName(band.member)} is narrating via{" "}
+            <strong className="font-bold text-[var(--reader-text)]">{comradeName(band.member.name)}</strong>
+          </>
+        ) : (
+          <>
+            <strong className="font-bold text-[var(--reader-text)]">{comradeName(band.member.name)}</strong>{" "}
+            {band.member.micOnAt !== null ? "is speaking from this passage" : "selected this passage"}
+          </>
+        )}
       </p>
-    </>
+    </div>
   );
 }

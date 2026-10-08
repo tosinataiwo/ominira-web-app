@@ -25,11 +25,9 @@ export type Locator =
   | { kind: "page"; page: number }
   /** Reflowable single-document formats (DOCX, extracted web articles): the
    * index of a top-level block in the rendered article. Deliberately an
-   * index rather than a scroll offset or fraction — the reader can change
-   * font size, line height and column width at any time
-   * (useArticleTypographyStyle), which reflows the document and invalidates
-   * any pixel- or fraction-based position, while the block sequence itself
-   * is stable. */
+   * index rather than a scroll offset or fraction — the text reflows with
+   * the viewport, which invalidates any pixel- or fraction-based position,
+   * while the block sequence itself is stable. */
   | { kind: "block"; blockIndex: number };
 
 export type LocatorKind = Locator["kind"];
@@ -62,7 +60,7 @@ export type LocatorScale =
  * *count* (not its content) — so a caller that only needs a progress bar
  * never has to ship full book text to the client to get one.
  */
-export function buildEpubScale(book: BookDocument): Extract<LocatorScale, { kind: "epub" }> {
+export function buildEpubScale(book: Pick<BookDocument, "sections" | "spine">): Extract<LocatorScale, { kind: "epub" }> {
   const sectionPassageCounts: Record<string, number> = {};
   for (const [id, section] of buildSectionsById(book.sections)) {
     sectionPassageCounts[id] = section.passages.length;

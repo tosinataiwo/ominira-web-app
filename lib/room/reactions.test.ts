@@ -5,18 +5,18 @@ const nameOf = (id: string) => ({ ada: "Ada", kofi: "Kofi", sekou: "Sekou" })[id
 
 describe("addToBurst", () => {
   test("counts emoji, lists each reactor once, keeps the first speaker", () => {
-    let burst = addToBurst(null, "kofi", ["👏", "👏"], "ada");
+    let burst = addToBurst(null, "kofi", ["👏🏾", "👏🏾"], "ada");
     burst = addToBurst(burst, "sekou", ["❤️"], "kofi");
     burst = addToBurst(burst, "kofi", ["❤️"], null);
-    expect(burst).toEqual({ counts: { "👏": 2, "❤️": 2 }, readerIds: ["kofi", "sekou"], speakerId: "ada" });
+    expect(burst).toEqual({ counts: { "👏🏾": 2, "❤️": 2 }, readerIds: ["kofi", "sekou"], speakerId: "ada" });
   });
 });
 
 describe("digestLine", () => {
   test("several reactors, about the speaker's point; most-used emoji first", () => {
-    let burst = addToBurst(null, "kofi", ["👏"], "ada");
+    let burst = addToBurst(null, "kofi", ["👏🏾"], "ada");
     burst = addToBurst(burst, "sekou", ["❤️", "❤️"], null);
-    expect(digestLine(burst, "me", nameOf)).toEqual({ text: "2 comrades loved Ada's point", emojis: ["❤️", "👏"] });
+    expect(digestLine(burst, "me", nameOf)).toEqual({ text: "2 comrades loved Ada's point", emojis: ["❤️", "👏🏾"] });
   });
 
   test("a tie goes to the first used", () => {
@@ -25,8 +25,8 @@ describe("digestLine", () => {
   });
 
   test("one reactor is named; you are You", () => {
-    expect(digestLine(addToBurst(null, "kofi", ["👏"], "ada"), "me", nameOf).text).toBe("Kofi applauded Ada's point");
-    expect(digestLine(addToBurst(null, "me", ["🙏"], "ada"), "me", nameOf).text).toBe("You thanked Ada");
+    expect(digestLine(addToBurst(null, "kofi", ["👏🏾"], "ada"), "me", nameOf).text).toBe("Kofi applauded Ada's point");
+    expect(digestLine(addToBurst(null, "me", ["🙏🏾"], "ada"), "me", nameOf).text).toBe("You thanked Ada");
   });
 
   test("about you, or with nobody speaking", () => {
@@ -67,9 +67,9 @@ describe("createReactions", () => {
 
   test("a tap is sent, rises here, and is gone after ~3 s", () => {
     const { reactions, sent, rising } = setup();
-    reactions.react("👏");
-    expect(sent).toEqual([{ from: "me", emojis: ["👏"] }]);
-    expect(rising()).toMatchObject([{ readerId: "me", emoji: "👏", delayMs: 0 }]);
+    reactions.react("👏🏾");
+    expect(sent).toEqual([{ from: "me", emojis: ["👏🏾"] }]);
+    expect(rising()).toMatchObject([{ readerId: "me", emoji: "👏🏾", delayMs: 0 }]);
     jest.advanceTimersByTime(RISE_MS);
     expect(rising()).toEqual([]);
   });
@@ -88,7 +88,7 @@ describe("createReactions", () => {
 
   test("stops on abort", () => {
     const { receive, digests, abort } = setup();
-    receive({ from: "kofi", emojis: ["👏"] });
+    receive({ from: "kofi", emojis: ["👏🏾"] });
     abort.abort();
     jest.advanceTimersByTime(DIGEST_QUIET_MS);
     expect(digests).toEqual([]);

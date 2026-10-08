@@ -1,66 +1,84 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Hand, Maximize2 } from "lucide-react";
-import FollowPill, { JumpPrompt } from "./FollowPill";
-import MicToggle from "./MicToggle";
-import { ReactButton, RisingReactions } from "./Reactions";
+import { Maximize2 } from "lucide-react";
+import FollowPill from "./FollowPill";
+import { RisingReactions } from "./Reactions";
+import RoomActions, { ROOM_CHAT_ID } from "./RoomActions";
 import RoomAvatar from "./RoomAvatar";
 import { useBottomDock, useNarrationBarHeight } from "@/app/components/useBottomDock";
 import { isIOSDevice } from "@/lib/pwa/platform";
-import { useFollowing, useReaderView, useRoom, useRoomControls, useSpeaking, useVoices } from "@/lib/room/hooks";
+import { useFollowing, useReaderView, useRoom, useRoomControls, useVoices } from "@/lib/room/hooks";
 import { micBlockedHelp } from "@/lib/room/mic";
 import { speakingLine } from "@/lib/room/presence";
 import { useDebounced } from "@/lib/time/useDebounced";
+import { useFeedStore } from "@/stores/feed-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import { useRoomStore } from "@/stores/room-store";
 import { showToast } from "@/stores/toast-store";
 
-// The room's mini-player (spec §1.2): in the app shell, so it survives
-// leaving the reader. Mobile is a card (C1); from the shell breakpoint it's
-// a dock floating at the foot of the page, max 720px (C2). It stacks above
-// the narration bar when both are showing. Its status line carries the
-// states of spec §10. In the book's reader, the follow pill and the Jump
-// prompt sit above it.
+// The room's mini-player (spec §1.2): a card floating in the middle, clear
+// of everything docked below it — the narration bar and, in the reader, the
+// chapter footer, sliding down when the footer tucks away (on phones,
+// contents stacked, C1; from the shell breakpoint, one row at max 840px, C2). In the
+// app shell, so it survives leaving the reader. Expanding it opens the
+// book's feed panel on its Room tab (back in the book, when you've left
+// it); it stays up while that panel is open, holding the controls, so the
+// panel's Room tab is just who's here and the chat. Its status line carries
+// the states of spec §10. In the book's reader, the follow pill floats just
+// above it. Leave room, and End room for a moderator, sit in RoomExit.
 
-const button =
-  "flex h-11 items-center justify-center gap-2 rounded-md border px-3.5 text-[15px] font-semibold whitespace-nowrap cursor-pointer transition-colors disabled:cursor-default disabled:opacity-50 shell:h-10 shell:flex-none";
+// Your mic, hand, reactions and the way into the chat are RoomActions.
+const useHereButton =
+  "flex h-11 items-center justify-center gap-2 rounded-sm border px-3.5 text-[14px] font-bold whitespace-nowrap cursor-pointer transition-colors shell:h-10 shell:flex-none";
 
 const IOS_NOTE_KEY = "ominira-room-ios-note";
+
+/** Expanded, the chat is already in the panel: scroll just the panel's list
+ * to it. scrollIntoView would scroll the page too, lifting the panel's
+ * header out of view. */
+function scrollToChat() {
+  const chat = document.getElementById(ROOM_CHAT_ID);
+  const list = chat?.closest(".om-scroll");
+  if (!chat || !list) return;
+  const top = chat.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+  list.scrollTo({ top: top - 16, behavior: "smooth" });
+}
 
 export default function RoomMiniPlayer() {
   const dock = useBottomDock();
   const narrationHeight = useNarrationBarHeight();
+  const footerHeight = useLayoutStore((s) => s.readerFooterHeight);
+  const below = dock.bottom + narrationHeight + footerHeight;
   const setRoomPlayerHeight = useLayoutStore((s) => s.setRoomPlayerHeight);
-  const setPanelOpen = useRoomStore((s) => s.setPanelOpen);
-  // The desktop room panel is as wide as the reader's notes panel.
-  const panelOpen = useRoomStore((s) => s.panelOpen);
-  const leave = useRoomStore((s) => s.leave);
+  const openRoom = useOpenRoom();
+  const materialId = useRoom((s) => s.room.materialId);
   const join = useRoomStore((s) => s.join);
   const session = useRoomStore((s) => s.session);
   const controls = useRoomControls();
-  const micsOn = useSpeaking();
   const voices = useVoices();
   const title = useRoom((s) => s.room.title);
   const roomId = useRoom((s) => s.room.id);
-  // Who the player shows: who's talking, else a live mic, else a moderator, else you.
-  const featured = useRoom(
-    (s) =>
-      voices?.[0] ??
-      micsOn?.[0] ??
-      s.roster.find((p) => p.isModerator) ??
-      s.roster.find((p) => p.readerId === s.readerId),
-  );
+  // Who the player shows: you, until someone is heard — then them.
+  const featured = useRoom((s) => voices?.[0] ?? s.roster.find((p) => p.readerId === s.readerId));
   const me = useRoom((s) => s.readerId);
   const followingId = useFollowing()?.member.readerId;
   const inReader = useReaderView() !== null;
   const iosNote = useIosNote();
+  // Already expanded: the book's panel is open on its Room tab.
+  const expanded = useFeedStore((s) => inReader && s.openFor === materialId && s.tab === "room");
+  // On phones the feed panel is a sheet the player would cover, so the
+  // player steps aside while it's open on this book.
+  const feedOpen = useFeedStore((s) => inReader && s.openFor === materialId);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => setRoomPlayerHeight(entries[0].contentRect.height));
+    // The border box: its bottom padding is the gap below the card, which
+    // whatever stacks above clears too.
+    const ro = new ResizeObserver((entries) => setRoomPlayerHeight(entries[0].borderBoxSize[0].blockSize));
     ro.observe(el);
     return () => {
       ro.disconnect();
@@ -83,28 +101,28 @@ export default function RoomMiniPlayer() {
   const announced = useDebounced(status, 1500);
 
   if (!controls || !session) return null;
-  const { handRaised, connection, elsewhere, audioSuspended } = controls;
+  const { elsewhere, audioSuspended } = controls;
   const blocked = status === "Mic blocked";
 
   return (
     <div
       ref={ref}
       data-reader-theme={dock.theme}
-      className={`${dock.className} ${panelOpen ? "shell:right-95" : ""} pointer-events-none flex flex-col gap-2 px-3 pb-3 shell:items-center shell:px-6`}
-      style={{ bottom: dock.bottom + narrationHeight }}
+      className={`${dock.className} pointer-events-none ${feedOpen ? "hidden shell:flex" : "flex"} flex-col px-3 pb-3 transition-[bottom] duration-200 ease-out shell:items-center shell:px-6 shell:pb-4`}
+      // At the screen's edge, it clears the home indicator too.
+      style={{ bottom: below, marginBottom: below === 0 ? "env(safe-area-inset-bottom)" : undefined }}
     >
       {inReader && !elsewhere && (
-        <div className="flex flex-wrap justify-center gap-2 empty:hidden">
-          <JumpPrompt />
+        <div className="pointer-events-none absolute inset-x-0 bottom-full flex flex-wrap justify-center gap-2 px-3 pb-2 empty:hidden">
           <FollowPill />
         </div>
       )}
-      <div className="pointer-events-auto relative flex flex-col gap-3 rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5 pt-3.5 pb-1.5 shadow-md shell:w-full shell:max-w-[720px] shell:flex-row shell:flex-wrap shell:items-center shell:gap-x-4 shell:gap-y-2 shell:py-3 shell:pr-13 shell:pl-3.5">
+      <div className="pointer-events-auto relative flex flex-col gap-3 rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5 pt-3.5 pb-1.5 shadow-md shell:w-full shell:max-w-[840px] shell:flex-row shell:flex-wrap shell:items-center shell:gap-x-4 shell:gap-y-2 shell:py-3 shell:pr-13 shell:pl-3.5">
         {!elsewhere && <RisingReactions />}
-        {!elsewhere && (
+        {!elsewhere && !expanded && (
           <button
             type="button"
-            onClick={() => setPanelOpen(true)}
+            onClick={() => openRoom(materialId!)}
             aria-label="Open the room"
             title="Open the room"
             className="absolute top-2.5 right-2.5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-sm text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] shell:top-1.5 shell:right-1.5 shell:h-8 shell:w-8"
@@ -113,7 +131,7 @@ export default function RoomMiniPlayer() {
           </button>
         )}
 
-        <div className="flex min-w-0 items-center gap-3 pr-10 shell:flex-1 shell:pr-0">
+        <div className={`flex min-w-0 items-center gap-3 shell:flex-1 shell:pr-0 ${expanded ? "" : "pr-10"}`}>
           {featured && (
             <RoomAvatar
               member={featured}
@@ -123,7 +141,7 @@ export default function RoomMiniPlayer() {
             />
           )}
           <div className="flex min-w-0 flex-col items-start gap-0.5">
-            <span className="max-w-full truncate text-[15px] font-semibold text-[var(--reader-text)]">{title}</span>
+            <span className="max-w-full truncate text-[14px] font-bold text-[var(--reader-text)]">{title}</span>
             {audioSuspended && !elsewhere ? (
               <button
                 type="button"
@@ -149,13 +167,7 @@ export default function RoomMiniPlayer() {
             <span aria-live="polite" className="sr-only">
               {announced}
             </span>
-            <button
-              type="button"
-              onClick={() => void leave()}
-              className="-ml-1.5 hidden h-6.5 cursor-pointer rounded-sm px-1.5 text-xs font-bold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)] shell:block"
-            >
-              Leave room
-            </button>
+            <RoomExit className="-ml-1.5 hidden shell:flex" button="h-6.5 px-1.5 text-xs" />
           </div>
         </div>
 
@@ -166,29 +178,14 @@ export default function RoomMiniPlayer() {
             onClick={() =>
               void join(roomId!).catch((err) => showToast(err instanceof Error ? err.message : "Couldn't join the room."))
             }
-            className={`${button} border-[var(--reader-accent)] bg-transparent text-[var(--reader-accent)]`}
+            className={`${useHereButton} border-[var(--reader-accent)] bg-transparent text-[var(--reader-accent)]`}
           >
             Use here
           </button>
         ) : (
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-2.5 shell:flex shell:items-center shell:gap-2">
-            <MicToggle className={button} />
-            <button
-              type="button"
-              disabled={connection === "connecting"}
-              aria-pressed={handRaised}
-              onClick={() => (handRaised ? session.lowerHand() : session.raiseHand())}
-              className={`${button} ${
-                handRaised
-                  ? "border-[var(--reader-accent)] bg-[color-mix(in_srgb,var(--reader-accent)_10%,var(--reader-surface))] text-[var(--reader-accent)]"
-                  : "border-[var(--reader-border)] bg-[var(--reader-surface)] text-[var(--reader-text)]"
-              }`}
-            >
-              <Hand size={18} strokeWidth={1.75} />
-              {handRaised ? "Lower hand" : "Raise hand"}
-            </button>
-            <ReactButton className={button} disabled={connection === "connecting"} />
-          </div>
+          <RoomActions
+            onChat={() => (expanded ? scrollToChat() : openRoom(materialId!))}
+          />
         )}
 
         {iosNote && !elsewhere && (
@@ -197,14 +194,46 @@ export default function RoomMiniPlayer() {
           </p>
         )}
 
+        <RoomExit className="justify-center gap-2 shell:hidden" button="h-9 px-4 text-sm" />
+      </div>
+    </div>
+  );
+}
+
+/** Leave room, and for a moderator End room (asked first: it ends the room
+ * for everyone). `button` sizes both for where they sit. */
+function RoomExit({ className, button }: { className: string; button: string }) {
+  const leave = useRoomStore((s) => s.leave);
+  const session = useRoomStore((s) => s.session);
+  const isModerator = useRoomControls()?.isModerator ?? false;
+  const [ending, setEnding] = useState(false);
+  const base = `${button} cursor-pointer rounded-sm font-bold whitespace-nowrap disabled:cursor-default disabled:opacity-50`;
+  return (
+    <div className={`flex items-center ${className}`}>
+      <button
+        type="button"
+        onClick={() => void leave()}
+        className={`${base} text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]`}
+      >
+        Leave room
+      </button>
+      {isModerator && session && (
         <button
           type="button"
-          onClick={() => void leave()}
-          className="h-9 cursor-pointer self-center rounded-sm px-4 text-sm font-bold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)] shell:hidden"
+          disabled={ending}
+          onClick={() => {
+            if (!window.confirm("End the room for everyone?")) return;
+            setEnding(true);
+            session.end().catch(() => {
+              setEnding(false);
+              showToast("Couldn't end the room. Try again.");
+            });
+          }}
+          className={`${base} text-red-600 hover:text-red-700`}
         >
-          Leave room
+          {ending ? "Ending…" : "End room"}
         </button>
-      </div>
+      )}
     </div>
   );
 }

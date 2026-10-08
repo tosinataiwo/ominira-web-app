@@ -33,6 +33,10 @@ type LayoutState = {
    * stacks above NowPlayingBar. Read through useDockedHeight. */
   roomPlayerHeight: number;
   setRoomPlayerHeight: (px: number) => void;
+  /** The reader's chapter footer's height while it's showing (0 otherwise),
+   * so RoomMiniPlayer floats above it rather than under it. */
+  readerFooterHeight: number;
+  setReaderFooterHeight: (px: number) => void;
 };
 
 export const useLayoutStore = create<LayoutState>((set) => ({
@@ -44,4 +48,6 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setTopBarHeight: (topBarHeight) => set({ topBarHeight }),
   roomPlayerHeight: 0,
   setRoomPlayerHeight: (roomPlayerHeight) => set({ roomPlayerHeight }),
+  readerFooterHeight: 0,
+  setReaderFooterHeight: (readerFooterHeight) => set({ readerFooterHeight }),
 }));

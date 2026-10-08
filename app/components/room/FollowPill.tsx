@@ -3,13 +3,13 @@
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import RoomAvatar from "./RoomAvatar";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import { useFollowing, useSummon } from "@/lib/room/hooks";
+import { useFollowing } from "@/lib/room/hooks";
 import { useRoomStore } from "@/stores/room-store";
 
 // Above the mini-player while you're in the book's reader (spec §3, M3/M4):
 // "Following Ada", or after a scroll of your own, solid "Return to Ada"
 // with an arrow towards her; × stops. A moderator's Bring everyone to my
-// page shows "Jump to Ada" to everyone not following them (spec §9).
+// page makes everyone follow them (spec §9).
 
 const pill = "pointer-events-auto flex h-9 max-w-full items-center rounded-full text-sm font-bold shadow-sm";
 const close = "flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full";
@@ -49,23 +49,6 @@ export default function FollowPill() {
         onClick={() => session.unfollow()}
         className={`${close} text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]`}
       >
-        <X size={16} strokeWidth={2.25} />
-      </button>
-    </div>
-  );
-}
-
-export function JumpPrompt() {
-  const summon = useSummon();
-  const session = useRoomStore((s) => s.session);
-  if (!summon || !session) return null;
-  const name = comradeName(summon.member.name);
-  return (
-    <div role="status" className={`${pill} bg-brand-500 text-white`}>
-      <button type="button" onClick={() => session.jumpToSummon()} className="h-9 min-w-0 cursor-pointer truncate pr-1 pl-3.5">
-        Jump to {name}
-      </button>
-      <button type="button" aria-label="Dismiss" onClick={() => session.dismissSummon()} className={`${close} hover:bg-white/15`}>
         <X size={16} strokeWidth={2.25} />
       </button>
     </div>

@@ -29,7 +29,7 @@ export default function AdminPageHeader({
         ) : (
           <p className="mb-2 text-[12px] font-semibold text-[var(--reader-accent)]">Admin</p>
         )}
-        <h1 className="m-0 font-serif text-2xl font-bold tracking-tight text-[var(--reader-text)]">{title}</h1>
+        <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">{title}</h1>
         {subtitle && <p className="m-0 mt-1 text-[13px] font-medium text-[var(--reader-text-muted)]">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

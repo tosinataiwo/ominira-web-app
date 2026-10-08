@@ -69,7 +69,7 @@ export default function RoomEnded() {
           >
             <X size={22} strokeWidth={1.75} />
           </button>
-          <span className="text-xs text-[var(--reader-text-subtle)]">
+          <span className="text-xs font-medium text-[var(--reader-text-muted)]">
             Ended {clock.format(ended)} · {formatDuration(ended - Date.parse(room.startedAt))}
           </span>
         </div>
@@ -77,14 +77,14 @@ export default function RoomEnded() {
         <div className="flex flex-col items-center gap-2.5 text-center">
           {(["light", "dark"] as const).map((t) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={t} src={SPLASH_MARK[t]} alt="" aria-hidden="true" className={`theme-${t}-only h-auto w-14`} />
+            <img key={t} src={SPLASH_MARK[t]} alt="" aria-hidden="true" className={`theme-${t}-only h-auto w-32`} />
           ))}
-          <h2 id="room-ended-title" className="font-serif text-2xl font-semibold text-balance text-[var(--reader-text)]">
+          <h2 id="room-ended-title" className="font-serif type-1 font-bold text-[var(--reader-text)]">
             The room has ended.
           </h2>
           <p className="text-sm text-balance text-[var(--reader-text-muted)]">
-            {room.title} · {room.bookTitle}
-            {moderators ? ` · moderated by ${moderators}` : ""}
+            {room.title} ·
+            {moderators ? ` Moderated by ${moderators}` : ""}
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default function RoomEnded() {
           <div className="mx-auto flex w-full max-w-[520px] flex-col gap-2.5">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-[15px] font-semibold text-[var(--reader-text)]">Who joined</span>
-              <span className="text-xs text-[var(--reader-text-muted)]">
+              <span className="text-xs font-medium text-[var(--reader-text-muted)]">
                 {joined.total} {joined.total === 1 ? "comrade" : "comrades"}
                 {fullFor}
               </span>

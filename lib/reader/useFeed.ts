@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useFeedStore } from "@/stores/feed-store";
 import type { Note } from "@/lib/api/types";
 import { useSessionStore } from "@/stores/session-store";
 import { useAnnotations } from "./useAnnotations";
@@ -6,17 +7,15 @@ import { topLevelNotes } from "./noteThread";
 import { annotationSortKey, generalNoteSortKey, type FeedSort } from "./feedSort";
 import { buildAnnotationFeedEntries, type FeedEntry, type FeedLocator } from "./annotationFeed";
 
-/** Which entries the panel actually renders — "notes" (labeled "Public
- * notes") narrows down to entries with at least one note, "highlights"
- * (labeled "Your highlights") is the complement, bare highlights only,
- * nothing discussed yet. Every entry is exactly one or the other (never
- * both, never neither), so these two exhaust the feed on their own — no
- * third "all" option needed. Purely a display filter — totals below are
- * always computed from the full, unfiltered set, so the header badge/
- * subtitle never appears to shrink just because the reader narrowed their
- * own view. "chat" is the live room's chat (app/components/room/RoomChat),
- * offered only while you're in the room on this book; no feed items. */
-export type AnnotationFeedFilter = "notes" | "highlights" | "chat";
+/** Which entries the panel renders — "notes" narrows down to entries with
+ * at least one note, "highlights" is the complement, bare highlights only,
+ * nothing discussed yet. Every entry is exactly one or the other, so these
+ * two exhaust the feed on their own. Purely a display filter — totals below
+ * are always computed from the full, unfiltered set, so the header badge
+ * never appears to shrink just because the reader narrowed their own view.
+ * "room" is the live room (app/components/room/RoomPanel), offered only while
+ * you're in the room on this book; no feed items. */
+export type { FeedTab } from "@/stores/feed-store";
 
 /** One row the panel actually renders — a highlighted passage's discussion
  * (with its own chapter/section `label` for context — see FeedEntry) or a
@@ -25,7 +24,7 @@ export type AnnotationFeedFilter = "notes" | "highlights" | "chat";
  * sortable list rather than the old per-chapter grouping — every entry
  * carries its own context label inline instead, so "where is this from"
  * lives on the entry, not on a section it sits under (see
- * BookAnnotationFeedPanel). */
+ * FeedPanel). */
 export type FeedItem = { kind: "highlight"; entry: FeedEntry } | { kind: "general"; note: Note };
 
 /** Another reader who has written in this material, for NotesFeedFab's
@@ -42,16 +41,15 @@ function feedItemKey(item: FeedItem, notes: Note[], sort: "recent" | "top"): num
 }
 
 /**
- * Owns the book-wide annotation feed panel's own state — open/closed, the
- * flat sorted view-model, and which of the two tabs the reader currently
- * has selected. Defaults to "notes" — the feed's whole point is surfacing
+ * The book's feed panel — open/closed and its tab (feed-store, so the
+ * room's mini-player can open it too), and the flat sorted view-model. Defaults to "notes" — the feed's whole point is surfacing
  * discourse worth re-reading, and a heavily-highlighted book would
  * otherwise bury that under every bare highlight on first open. Which
  * highlight's thread is doing what (composer/menu/edit) is each
  * FeedHighlightThread's own concern via useThreadInteraction, not
  * centralized here — there's no single "active" entry for this panel.
  */
-export function useBookAnnotationFeed({
+export function useFeed({
   materialId,
   locate,
 }: {
@@ -62,8 +60,9 @@ export function useBookAnnotationFeed({
 }) {
   const { notes, allAnnotations } = useAnnotations(materialId);
 
-  const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState<AnnotationFeedFilter>("notes");
+  const open = useFeedStore((s) => s.openFor === materialId);
+  const filter = useFeedStore((s) => s.tab);
+  const setFilter = useFeedStore((s) => s.setTab);
   // "Book order" — General discussion first, then every highlight in
   // spine order — is the default: it's this panel's own natural browsing
   // order (General discussion first since it's not tied to any one place
@@ -82,7 +81,7 @@ export function useBookAnnotationFeed({
   const flatEntries: FeedEntry[] = useMemo(() => buildAnnotationFeedEntries(allAnnotations, locate), [allAnnotations, locate]);
 
   const items: FeedItem[] = useMemo(() => {
-    if (filter === "chat") return [];
+    if (filter === "room") return [];
     const byAuthor = (n: Note) => n.author.readerId === authorId;
     const highlightItems: FeedItem[] = flatEntries
       .filter((e) => (filter === "notes" ? e.annotation.notes.length > 0 : e.annotation.notes.length === 0))
@@ -179,20 +178,21 @@ export function useBookAnnotationFeed({
     [authorsById]
   );
 
-  /** Opens the feed — narrowed to one comrade's notes when given their id. */
-  const openFeed = useCallback((author?: string) => {
-    setAuthorId(author ?? null);
-    if (author) setFilter("notes");
-    setOpen(true);
-  }, []);
-  /** Opens the feed on the room chat. */
-  const openChat = useCallback(() => {
+  /** Opens the feed on its notes — narrowed to one comrade's when given their id. */
+  const openFeed = useCallback(
+    (author?: string) => {
+      setAuthorId(author ?? null);
+      useFeedStore.getState().open(materialId, "notes");
+    },
+    [materialId]
+  );
+  /** Opens the feed on the Room tab. */
+  const openRoom = useCallback(() => {
     setAuthorId(null);
-    setFilter("chat");
-    setOpen(true);
-  }, []);
+    useFeedStore.getState().open(materialId, "room");
+  }, [materialId]);
   const close = useCallback(() => {
-    setOpen(false);
+    useFeedStore.getState().close();
     setAuthorId(null);
   }, []);
   const clearAuthor = useCallback(() => setAuthorId(null), []);
@@ -218,9 +218,9 @@ export function useBookAnnotationFeed({
     focusedAuthor,
     clearAuthor,
     openFeed,
-    openChat,
+    openRoom,
     close,
   };
 }
 
-export type BookAnnotationFeed = ReturnType<typeof useBookAnnotationFeed>;
+export type Feed = ReturnType<typeof useFeed>;

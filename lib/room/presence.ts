@@ -1,5 +1,6 @@
 import type { RoomPresence } from "@/lib/room/events";
 import { comradeName } from "@/lib/reader/authorDisplay";
+import { voiceById } from "@/lib/audio/voices";
 
 // Pure selectors over the channel's presence entries (spec §3.3, §6.2).
 // Everything that lists room members goes through these.
@@ -37,19 +38,34 @@ export function selectHands(roster: readonly RoomPresence[]): RoomPresence[] {
   return roster.filter((p) => p.handRaisedAt !== null).sort((a, b) => a.handRaisedAt! - b.handRaisedAt!);
 }
 
-/** Everyone with their mic off, in join order. A raised hand stays here too,
- * shown by its badge. */
+/** Everyone with their mic off and no hand up (Hands raised shows those),
+ * in join order. */
 export function selectListening(roster: readonly RoomPresence[]): RoomPresence[] {
-  return roster.filter((p) => p.micOnAt === null);
+  return roster.filter((p) => p.micOnAt === null && p.handRaisedAt === null);
 }
 
+/** The narrator voice reading aloud through this speaker's mic, by name
+ * ("Leah"); null when they're not reading aloud. */
+export const narratorName = (member: Pick<RoomPresence, "readingAloud">): string | null =>
+  voiceById(member.readingAloud)?.name ?? null;
+
 /** "Comrade Ada is speaking" / "… and Comrade Sekou are speaking" /
- * "…, Comrade Sekou and 2 more are speaking"; null when nobody is. Takes
- * Speaking now's order (newest first). */
-export function speakingLine(speakers: readonly Pick<RoomPresence, "name">[]): string | null {
-  const [first, second] = speakers.map((p) => comradeName(p.name));
-  if (!first) return null;
-  if (!second) return `${first} is speaking`;
-  if (speakers.length === 2) return `${first} and ${second} are speaking`;
-  return `${first}, ${second} and ${speakers.length - 2} more are speaking`;
+ * "…, Comrade Sekou and 2 more are speaking"; null when nobody is. A
+ * speaker reading aloud is the narrator's turn, not theirs: "Leah is
+ * narrating via Comrade Ada". Takes Speaking now's order (newest first). */
+export function speakingLine(speakers: readonly Pick<RoomPresence, "name" | "readingAloud">[]): string | null {
+  const narrating = speakers.flatMap((p) => {
+    const narrator = narratorName(p);
+    return narrator ? [`${narrator} is narrating via ${comradeName(p.name)}`] : [];
+  });
+  const [first, second, ...rest] = speakers.filter((p) => !narratorName(p)).map((p) => comradeName(p.name));
+  const talking = !first
+    ? null
+    : !second
+      ? `${first} is speaking`
+      : rest.length === 0
+        ? `${first} and ${second} are speaking`
+        : `${first}, ${second} and ${rest.length} more are speaking`;
+  const line = [...narrating, ...(talking ? [talking] : [])].join(" · ");
+  return line || null;
 }

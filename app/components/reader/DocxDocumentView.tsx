@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useReaderStore } from "@/stores/reader-store";
+import { useCallback, useEffect, useState } from "react";
+import { useReaderStore, useTypographyStyle } from "@/stores/reader-store";
 import type { Locator } from "@/lib/reader/locator";
 import { useArticleProgress } from "@/lib/reader/useArticleProgress";
 import { useDocumentKeyboard } from "@/lib/reader/useDocumentKeyboard";
 import DocumentEndPanel from "./DocumentEndPanel";
-import { useArticleTypographyStyle } from "@/lib/reader/useArticleTypographyStyle";
 import ReaderHeader from "./ReaderHeader";
 import { ARTICLE_SCROLL_CLASS, useArticleAnnotations } from "./useArticleAnnotations";
+import { ArticleNarrationFollower, useArticleNarration } from "./useArticleNarration";
+import { useDockedHeight } from "@/app/components/useBottomDock";
 import { cacheDocument, readCachedDocument } from "@/lib/offline/documentCache";
 import Loader from "../Loader";
 
@@ -32,10 +33,8 @@ const RAIL_INSET_PX = 16;
  * only, no highlighting, no TOC: fetches `sourceUrl` client-side, runs it
  * through `mammoth.convertToHtml` (→ semantic HTML: headings/lists/bold/
  * italic), and renders it as a reflowing article via the shared
- * `.reader-article` typography (globals.css) + useArticleTypographyStyle
- * (the exact same reader-store-derived font-size/line-height/width/family
- * EPUB's own BookContent uses, not a separate approximation of it — see
- * that hook's own doc comment). Converts on every open rather than caching
+ * `.reader-article` typography (globals.css — the same reading tokens
+ * EPUB's BookContent uses). Converts on every open rather than caching
  * the HTML — revisit only if real-world files prove slow.
  *
  * Mounts the same dual way Reader/PdfDocumentView already do: standalone
@@ -63,7 +62,7 @@ export default function DocxDocumentView({
   onClose?: () => void;
 }) {
   const theme = useReaderStore((s) => s.theme);
-  const typography = useArticleTypographyStyle();
+  const typographyStyle = useTypographyStyle();
   // The markup object itself is state, not rebuilt per render: React re-sets
   // innerHTML whenever it gets a new `{ __html }` object, which would replace
   // the article (and the paragraph under a reader's finger) on every render.
@@ -76,14 +75,26 @@ export default function DocxDocumentView({
   // Arrows/PageUp/PageDown/Space/Home/End scroll the document on desktop — see
   // the hook; with no pages to turn, ←/→ move by a screenful.
   useDocumentKeyboard({ scrollElement });
+  // The article element, for narration, alongside useArticleProgress's own.
+  const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
+  const attachArticle = useCallback(
+    (el: HTMLDivElement | null) => {
+      contentRef(el);
+      setContentEl(el);
+    },
+    [contentRef]
+  );
+  const { listen, listenFrom } = useArticleNarration({ materialId, title, contentEl });
   const { attachContent, chrome, highlights } = useArticleAnnotations({
     materialId,
     title,
-    contentRef,
+    contentRef: attachArticle,
     scrollElement,
-    typography,
     ready: resumeApplied,
+    onListenFrom: listen.canListen ? listenFrom : undefined,
   });
+  // Keeps the end of the article clear of the narration bar / room player.
+  const dockedHeight = useDockedHeight();
 
   useEffect(() => {
     let cancelled = false;
@@ -108,12 +119,18 @@ export default function DocxDocumentView({
   return (
     <div
       data-reader-theme={theme}
-      className="w-full h-dvh box-border flex flex-col overflow-hidden relative font-sans"
-      style={{ background: "var(--reader-bg)" }}
+      className="reader-typography w-full h-dvh box-border flex flex-col overflow-hidden relative font-sans"
+      style={{ ...typographyStyle, background: "var(--reader-bg)" }}
     >
-      <ReaderHeader materialId={materialId} topBarHeightPx={TOP_BAR_HEIGHT_PX} railInsetPx={RAIL_INSET_PX} onClose={onClose} title={title} />
-      <div ref={scrollRef} className={ARTICLE_SCROLL_CLASS} style={{ paddingTop: TOP_BAR_HEIGHT_PX }}>
-        <div className="mx-auto px-6 py-10" style={{ maxWidth: typography.maxWidth }}>
+      <ReaderHeader
+        topBarHeightPx={TOP_BAR_HEIGHT_PX}
+        railInsetPx={RAIL_INSET_PX}
+        onClose={onClose}
+        title={title}
+        {...listen}
+      />
+      <div ref={scrollRef} className={ARTICLE_SCROLL_CLASS} style={{ paddingTop: TOP_BAR_HEIGHT_PX, paddingBottom: dockedHeight }}>
+        <div className="mx-auto px-6 py-10" style={{ maxWidth: "var(--reader-max-width)" }}>
           {error ? (
             <p className="text-sm text-[var(--reader-text-muted)]">This document couldn&apos;t be opened.</p>
           ) : markup === null ? (
@@ -122,7 +139,6 @@ export default function DocxDocumentView({
             <div
               ref={attachContent}
               className="reader-article"
-              style={{ fontFamily: typography.fontFamily, fontSize: typography.fontSize, lineHeight: typography.lineHeight }}
               dangerouslySetInnerHTML={markup}
             />
           )}
@@ -136,6 +152,7 @@ export default function DocxDocumentView({
       </div>
       {highlights}
       {chrome}
+      <ArticleNarrationFollower materialId={materialId} contentEl={contentEl} scrollEl={scrollElement} />
     </div>
   );
 }

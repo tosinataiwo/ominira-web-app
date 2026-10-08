@@ -106,6 +106,7 @@ function fakeDeps(hub: ReturnType<typeof createHub>, peers: FakePeer[]): Session
       title: "Room",
       bookTitle: "Book",
       bookAuthor: "Author",
+      bookSlug: "book",
       startedBy: "r0",
       startedAt: new Date().toISOString(),
       maxMembers: 25,
@@ -249,4 +250,53 @@ describe("RoomSession on a chaotic channel", () => {
       snapshots = [];
     });
   }
+});
+
+describe("Reading aloud", () => {
+  test("narration replaces the mic while it plays, and its word reaches listeners", async () => {
+    const hub = createHub(() => 0.5); // no drops or duplicates
+    const peers: FakePeer[] = [];
+    const a = new RoomSession("r0", async () => "token", {} as AudioContext, fakeDeps(hub, []));
+    const b = new RoomSession("r1", async () => "token", {} as AudioContext, fakeDeps(hub, peers));
+    const latest = (s: RoomSession) => {
+      let snap: Parameters<Parameters<RoomSession["subscribe"]>[0]>[0] = null;
+      s.subscribe((x) => (snap = x))();
+      return snap as Parameters<Parameters<RoomSession["subscribe"]>[0]>[0];
+    };
+    await a.start("book");
+    await b.join("room");
+    await b.setMic(true);
+    await hub.settle();
+    const sent = () => peers.filter((p) => !p.closed).map((p) => p.track);
+    const mic = sent()[0];
+    expect(mic).toBeTruthy();
+
+    const narration = { id: "narration" } as unknown as MediaStreamTrack;
+    b.setNarration({ track: narration, voice: "en-ZA-LeahNeural", word: { passageId: "p1", index: 3 } });
+    await wait(40);
+    expect(sent()).toEqual([narration]);
+    expect(latest(b)?.readingAloud).toBe(true);
+    expect(latest(a)?.narration).toEqual({ readerId: "r1", passageId: "p1", index: 3 });
+    // The room is told whose voice is reading.
+    await hub.settle();
+    expect(latest(a)?.roster.find((p) => p.readerId === "r1")?.readingAloud).toBe("en-ZA-LeahNeural");
+
+    // Paused: the mic again, and the highlight clears.
+    b.setNarration(null);
+    await wait(40);
+    expect(sent()).toEqual([mic]);
+    expect(latest(b)?.readingAloud).toBe(false);
+    expect(latest(a)?.narration).toBeNull();
+    await hub.settle();
+    expect(latest(a)?.roster.find((p) => p.readerId === "r1")?.readingAloud).toBeNull();
+
+    // Mic off: narration isn't sent, nor its word.
+    await b.setMic(false);
+    b.setNarration({ track: narration, voice: "en-ZA-LeahNeural", word: { passageId: "p1", index: 4 } });
+    await wait(40);
+    expect(sent()).toEqual([null]);
+    expect(latest(a)?.narration).toBeNull();
+
+    await Promise.all([a.leave(), b.leave()]);
+  });
 });

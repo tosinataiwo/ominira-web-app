@@ -29,3 +29,6 @@ export const AFRICAN_VOICES: AfricanVoice[] = [
 ];
 
 export const DEFAULT_VOICE_ID = AFRICAN_VOICES[0].id;
+
+export const voiceById = (id: string | null | undefined): AfricanVoice | undefined =>
+  id ? AFRICAN_VOICES.find((v) => v.id === id) : undefined;

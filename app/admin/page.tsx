@@ -232,7 +232,7 @@ function Tile({
         <InfoTip label={label}>{info}</InfoTip>
       </div>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-[26px] font-literata font-semibold leading-tight tracking-tight text-[var(--reader-text)]">{value}</span>
+        <span className="text-[26px] font-serif font-semibold leading-tight tracking-tight text-[var(--reader-text)]">{value}</span>
         {hasChange && (
           <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--reader-text)]">
             {change >= 0 ? (

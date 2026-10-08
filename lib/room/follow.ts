@@ -33,7 +33,7 @@ export type FollowEvent =
   /** You moved by hand: following pauses, the pill offers Return. */
   | { type: "scrolled" }
   | { type: "return" }
-  /** The one you follow brought everyone to their page: you go too. */
+  /** A moderator brought everyone to their page: you follow them (spec §9). */
   | { type: "summoned"; from: string }
   /** The one you follow left the room. */
   | { type: "roster"; readerIds: readonly string[] };
@@ -50,7 +50,7 @@ export function nextFollow(state: FollowState, event: FollowEvent): FollowState 
     case "return":
       return state.paused ? { ...state, paused: false } : state;
     case "summoned":
-      return state.targetId === event.from && state.paused ? { ...state, paused: false } : state;
+      return state.targetId === event.from && !state.paused ? state : { targetId: event.from, paused: false };
     case "roster":
       return state.targetId !== null && !event.readerIds.includes(state.targetId) ? NOT_FOLLOWING : state;
   }
@@ -99,7 +99,7 @@ export function resolvePlace(view: ReaderView, place: RoomPlace): ViewPlace | un
   return view.fraction(place) !== null ? place : view.placeAt(place.pct / 100);
 }
 
-/** "On p. 4" for a member (spec §3.3): from their exact place when they send
+/** "p. 4" for a member (spec §3.3): from their exact place when they send
  * one, else from presence progress, which is approximate. Null when there's
  * nothing to go on. */
 export function positionLabel(
@@ -124,12 +124,9 @@ export type FollowSnapshot = {
   direction: Direction;
   /** The latest exact place of each reader sending `pos`, by readerId. */
   places: Record<string, RoomPlace>;
-  /** A moderator's Bring everyone to my page, for a reader not following
-   * them: the "Jump to Ada" prompt. */
-  summon: { from: string; place: RoomPlace } | null;
 };
 
-export const FOLLOW_IDLE: FollowSnapshot = { ...NOT_FOLLOWING, direction: "down", places: {}, summon: null };
+export const FOLLOW_IDLE: FollowSnapshot = { ...NOT_FOLLOWING, direction: "down", places: {} };
 
 export type Follow = {
   /** The open reader, or null; ignored unless it's the room's book. */
@@ -143,15 +140,14 @@ export type Follow = {
   returnToFollowed(): void;
   /** Moderators: false when there's no place to send (not in the reader). */
   summonEveryone(): boolean;
-  jumpToSummon(): void;
-  dismissSummon(): void;
   close(): void;
 };
 
 type FollowOptions = {
   readerId: string;
   roomMaterialId: string;
-  /** Receivers honour `summon` only from these (events.ts acceptSummon). */
+  /** Receivers honour `summon` only from these, or a moderator in the
+   * roster (events.ts acceptSummon). */
   moderatorIds: readonly string[];
   channel: Pick<RoomChannel, "send" | "on">;
   /** Your presence now, and a change to it. */
@@ -234,17 +230,15 @@ export function createFollow(o: FollowOptions): Follow {
   });
 
   o.channel.on("summon", (event) => {
-    if (event.from === o.readerId || !acceptSummon(event, o.moderatorIds)) return;
+    // Moderators made after you joined are in the roster, not in moderatorIds.
+    const moderatorIds = [...o.moderatorIds, ...roster.filter((p) => p.isModerator).map((p) => p.readerId)];
+    if (event.from === o.readerId || !acceptSummon(event, moderatorIds)) return;
     const { from, ...place } = event;
-    const places = { ...snapshot.places, [from]: place };
-    if (from === state.targetId) {
-      // Followers simply go (spec §9).
-      emit({ places });
-      setState(nextFollow(state, { type: "summoned", from }));
-      show(place);
-    } else {
-      emit({ places, summon: { from, place } });
-    }
+    // Everyone follows them from here (spec §9); outside the reader, the
+    // follow takes you there when you open the book.
+    emit({ places: { ...snapshot.places, [from]: place } });
+    setState(nextFollow(state, { type: "summoned", from }));
+    show(place);
   });
 
   o.signal.addEventListener("abort", () => {
@@ -290,10 +284,7 @@ export function createFollow(o: FollowOptions): Follow {
       const ids = next.map((p) => p.readerId);
       setState(nextFollow(state, { type: "roster", readerIds: ids }));
       const places = Object.fromEntries(Object.entries(snapshot.places).filter(([id]) => ids.includes(id)));
-      const summon = snapshot.summon && ids.includes(snapshot.summon.from) ? snapshot.summon : null;
-      if (Object.keys(places).length !== Object.keys(snapshot.places).length || summon !== snapshot.summon) {
-        emit({ places, summon });
-      }
+      if (Object.keys(places).length !== Object.keys(snapshot.places).length) emit({ places });
       // A new follower or a new member needs your place now (their margin,
       // their follow), not at your next scroll; `pos` is otherwise sent only
       // on change.
@@ -328,13 +319,6 @@ export function createFollow(o: FollowOptions): Follow {
       o.channel.send("summon", { from: o.readerId, ...place });
       return true;
     },
-
-    jumpToSummon() {
-      show(snapshot.summon?.place);
-      emit({ summon: null });
-    },
-
-    dismissSummon: () => emit({ summon: null }),
 
     close() {
       clearTimeout(settle);

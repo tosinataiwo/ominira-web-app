@@ -14,7 +14,7 @@ type Props = {
   variant?: "full" | "mini";
   bookTitle: string;
   chapterLabel: string;
-  coverSrc: string;
+  coverSrc?: string;
   /** A real, exact duration — nothing sets this today (every book streams
    * live narration; see NarrationEngine's own doc comment), but the prop
    * stays here as where a future prerecorded, fixed-duration section would

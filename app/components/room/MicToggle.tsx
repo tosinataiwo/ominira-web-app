@@ -3,20 +3,33 @@
 import { Loader2, Mic, MicOff } from "lucide-react";
 import { useRoomControls } from "@/lib/room/hooks";
 import { useRoomStore } from "@/stores/room-store";
+import { tapNarration } from "@/lib/audio/narrationTap";
+import { voiceById } from "@/lib/audio/voices";
+import { useAudioStore } from "@/stores/audio-store";
 
-// Your mic, in the mini-player (labelled) and the panel footer (round)
-// (spec §1.2): outline + mic-off when off, brand fill + mic when on, a
+// Your mic, labelled, in RoomActions (spec §1.2): outline + mic-off when off, brand fill + mic when on, a
 // spinner while the browser asks, and "Mic blocked" when it was refused
-// (tapping asks again).
+// (tapping asks again). "Leah narrating" while your narration is what the room
+// hears (RoomNarration): playing it with the mic on sends the narrator's voice
+// in place of yours.
 
-export default function MicToggle({ className, round = false }: { className: string; round?: boolean }) {
+export default function MicToggle({ className }: { className: string }) {
   const session = useRoomStore((s) => s.session);
   const controls = useRoomControls();
+  const narrator = useAudioStore((s) => voiceById(s.voice)?.name ?? "Narrator");
   if (!controls || !session) return null;
-  const { micOn, micState, connection } = controls;
+  const { micOn, micState, readingAloud, connection } = controls;
   const acquiring = micState === "acquiring";
   const blocked = micState === "blocked" && !micOn;
-  const label = acquiring ? "Turning on…" : blocked ? "Mic blocked" : micOn ? "Mic on" : "Turn on mic";
+  const label = acquiring
+    ? "Turning on…"
+    : blocked
+      ? "Mic blocked"
+      : readingAloud
+        ? `${narrator} narrating`
+        : micOn
+          ? "Mic on"
+          : "Turn on mic";
   const Icon = acquiring ? Loader2 : micOn ? Mic : MicOff;
 
   return (
@@ -24,9 +37,11 @@ export default function MicToggle({ className, round = false }: { className: str
       type="button"
       disabled={connection === "connecting" || acquiring}
       aria-pressed={micOn}
-      aria-label={round ? (micOn ? "Turn off your mic" : blocked ? "Mic blocked, try again" : "Turn on your mic") : undefined}
-      title={round ? label : undefined}
-      onClick={() => void session.setMic(!micOn)}
+      onClick={() => {
+        // In this tap, so the browser lets the narration's audio graph start.
+        if (!micOn) tapNarration();
+        void session.setMic(!micOn);
+      }}
       className={`${className} ${
         micOn
           ? "border-brand-500 bg-brand-500 text-white"
@@ -36,7 +51,7 @@ export default function MicToggle({ className, round = false }: { className: str
       }`}
     >
       <Icon size={18} strokeWidth={1.75} className={acquiring ? "animate-spin" : undefined} />
-      {!round && label}
+      {label}
     </button>
   );
 }

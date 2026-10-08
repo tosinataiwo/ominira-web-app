@@ -11,12 +11,12 @@ import type { Locator } from "@/lib/reader/locator";
 /** The seven reactions (spec §1.5). Note reactions are a single ✊🏾, so the
  * room's set lives here, with the payload that carries it. */
 export const ROOM_REACTIONS = [
-  { emoji: "👏", label: "Applause" },
+  { emoji: "👏🏾", label: "Applause" },
   { emoji: "❤️", label: "Love" },
   { emoji: "💡", label: "Insight" },
   { emoji: "🤔", label: "Thinking" },
   { emoji: "😮", label: "Wow" },
-  { emoji: "🙏", label: "Thanks" },
+  { emoji: "🙏🏾", label: "Thanks" },
   { emoji: "✊🏾", label: "Solidarity" },
 ] as const;
 
@@ -75,6 +75,10 @@ export const PresenceSchema = z.object({
   micOnAt: z.number().nullable(),
   /** Epoch ms; orders hands first come. */
   handRaisedAt: z.number().nullable(),
+  /** The narrator voice (lib/audio/voices.ts id) the room hears in place of
+   * this speaker's mic while they read aloud; null otherwise. Defaulted, so
+   * presence from a client that predates it still parses. */
+  readingAloud: z.string().max(100).nullable().default(null),
   /** The readerId being followed. */
   followingId: id.nullable(),
   progressPct: z.number().min(0).max(100),
@@ -98,6 +102,13 @@ export const EVENT_SCHEMAS = {
   pos: PlaceSchema.extend({ from: id }),
   /** The speaker's selection; null clears it. */
   highlight: z.object({ from: id, ranges: z.array(RangeSchema).max(50).nullable() }),
+  /** The word a speaker's read-aloud narration is on (KaraokeWord.index in
+   * that passage), for listeners' word highlight; null when it stops. The
+   * audio itself goes over the speaker's peer connections, in place of the mic. */
+  narration: z.object({
+    from: id,
+    word: z.object({ passageId: z.string().max(200), index: z.int().nonnegative() }).nullable(),
+  }),
   summon: PlaceSchema.extend({ from: id }),
   chat: z.object({
     from: id,
@@ -157,6 +168,8 @@ export type RateLimit<P> =
 export const RATE_LIMITS: { [E in ClientEventName]?: RateLimit<RoomEvent<E>> } = {
   pos: { intervalMs: 1000, overflow: "latest" },
   highlight: { intervalMs: 1000, overflow: "latest" },
+  // A word lasts ~300 ms, so this keeps the highlight close to the voice.
+  narration: { intervalMs: 250, overflow: "latest" },
   chat: { intervalMs: 2000, overflow: "drop" },
   reaction: {
     intervalMs: 1000,

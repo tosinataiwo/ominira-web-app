@@ -96,7 +96,7 @@ export default function DocumentEndPanel({
       <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--reader-text-subtle)]">
         The end
       </div>
-      <h2 className="mt-2 font-serif text-xl font-semibold leading-tight text-[var(--reader-text)]">
+      <h2 className="font-serif type-3 text-balance mt-2 text-[var(--reader-text)]">
         {finishedAt ? `You finished ${title}` : `You've reached the end of ${title}`}
       </h2>
 
@@ -162,7 +162,6 @@ export default function DocumentEndPanel({
         <NoteComposer
           initialText=""
           placeholder="Share a thought"
-          startCollapsed
           showMemberPrompt
           action="note"
           draftKey={`finish-${materialId}`}
@@ -177,7 +176,7 @@ export default function DocumentEndPanel({
             );
           }}
         />
-        {/* Same muted treatment BookAnnotationFeedPanel gives its own composer
+        {/* Same muted treatment FeedPanel gives its own composer
             error — reader chrome, not an alarm. */}
         {noteError && <p className="m-0 mt-2 text-[11px] text-[var(--reader-text-muted)]">{noteError}</p>}
       </div>

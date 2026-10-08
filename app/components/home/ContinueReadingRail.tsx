@@ -26,8 +26,8 @@ export default function ContinueReadingRail() {
   return (
     <section className="mb-15">
       <div className="mb-5">
-        <h2 className="m-0 font-serif text-xl font-bold text-[var(--reader-text)]">Continue reading</h2>
-        {/* <p className="mt-1 mb-0 font-literata text-sm text-[var(--reader-text-muted)]">Right where you left off.</p> */}
+        <h2 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">Continue reading</h2>
+        {/* <p className="mt-1 mb-0 font-serif text-sm text-[var(--reader-text-muted)]">Right where you left off.</p> */}
       </div>
       {isLoading ? (
         <div className="flex gap-4 overflow-x-auto pb-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

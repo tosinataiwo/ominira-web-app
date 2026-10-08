@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Source_Serif_4, Manrope, Literata } from "next/font/google";
+import { Source_Serif_4, Manrope } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
@@ -15,25 +15,20 @@ import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import { BOOT_SCRIPT } from "@/lib/pwa/boot";
 import { ICON_VERSION } from "@/lib/config/brand-assets";
 
-// The wider reader font picker (app/fonts.ts) is defined but not loaded here
-// right now — only Literata (the current single reading-font default) is
-// applied, so the other 7 self-hosted fonts aren't paying for themselves in
-// bundle weight while there's no UI exposing them. Re-adding the picker is
-// just restoring this import, not rebuilding the font definitions.
-
+// opsz: next/font drops the optical-size axis unless asked, which flattens
+// headings to the 14pt text cut. Italic is loaded so it isn't synthesised.
+// latin-ext carries ṣ ṅ ɓ ɗ ƙ ƴ; vietnamese carries ẹ ọ ị ụ and the stacked
+// tone marks Yoruba/Igbo need.
 const sourceSerif = Source_Serif_4({
   variable: "--font-source-serif",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext", "vietnamese"],
+  style: ["normal", "italic"],
+  axes: ["opsz"],
 });
 
 const manrope = Manrope({
   variable: "--font-manrope",
-  subsets: ["latin"],
-});
-
-const literata = Literata({
-  variable: "--font-literata-google",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext", "vietnamese"],
 });
 
 export const metadata: Metadata = {
@@ -105,12 +100,21 @@ export default function RootLayout({
       // suppressed here rather than chased as a bug (per React's own
       // hydration-mismatch guidance).
       suppressHydrationWarning
-      className={`${sourceSerif.variable} ${manrope.variable} ${literata.variable} h-full antialiased`}
+      className={`${sourceSerif.variable} ${manrope.variable} h-full antialiased`}
     >
       <head>
         {/* Parser-blocking on purpose: sets data-reader-theme (and
             data-splash) on <html> before the first frame. */}
         <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+        {/* ::highlight() is rejected by the CSS pipeline, so it lives here.
+            Paints the narrated word for DOCX/web articles
+            (useArticleNarration); only colours and text-shadow apply. */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html:
+              "::highlight(om-narrating-word){background-color:var(--reader-active-word-bg);color:var(--reader-active-word-text);text-shadow:0 0 0.3px currentColor}",
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col font-sans">
         <QueryProvider>

@@ -6,6 +6,7 @@ import { LiveBadge } from "@/app/components/reader/ReaderPresence";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import type { RoomPresence } from "@/lib/room/events";
 import { useVoice } from "@/lib/room/hooks";
+import { voiceById } from "@/lib/audio/voices";
 
 // A room member's face (spec §4 sheet 04): the reader's own avatar plus what
 // they're doing in the room. Built on ReaderAvatar rather than AuthorAvatar,
@@ -14,7 +15,7 @@ import { useVoice } from "@/lib/room/hooks";
 // speaker dropped) come from the room, per member.
 
 type Props = {
-  member: Pick<RoomPresence, "readerId" | "name" | "avatar" | "micOnAt" | "handRaisedAt" | "mode">;
+  member: Pick<RoomPresence, "readerId" | "name" | "avatar" | "micOnAt" | "handRaisedAt" | "mode" | "readingAloud">;
   size?: number;
   /** Placed by progress rather than an exact position. */
   approximate?: boolean;
@@ -29,9 +30,12 @@ export function roomAvatarLabel({
   speaking,
   connecting,
 }: Pick<Props, "member"> & { speaking: boolean; connecting: boolean }) {
+  const narrator = voiceById(member.readingAloud);
   const state = connecting
     ? "connecting"
-    : speaking
+    : narrator
+      ? `${narrator.name} narrating`
+      : speaking
       ? "speaking"
       : member.micOnAt !== null
         ? "mic on"
@@ -55,6 +59,7 @@ export default function RoomAvatar({ member, size = 32, approximate, onClick, pr
       : "none";
   const badge = Math.max(12, Math.round(size * 0.42));
   const label = roomAvatarLabel({ member, speaking, connecting });
+  const narrator = voiceById(member.readingAloud);
   const Wrapper = onClick ? "button" : "span";
 
   return (
@@ -81,7 +86,16 @@ export default function RoomAvatar({ member, size = 32, approximate, onClick, pr
           outlineOffset: connecting ? 2 : 1,
         }}
       />
-      {member.handRaisedAt !== null ? (
+      {narrator ? (
+        // Reading aloud: the narrator's face, so it's clear whose voice the room hears.
+        <img
+          src={narrator.avatar}
+          alt=""
+          aria-hidden="true"
+          style={{ width: badge + 2, height: badge + 2 }}
+          className="absolute -bottom-[3px] -right-[3px] rounded-full object-cover ring-[1.5px] ring-[var(--reader-surface)]"
+        />
+      ) : member.handRaisedAt !== null ? (
         <span
           aria-hidden="true"
           style={{ width: badge, height: badge }}

@@ -14,17 +14,17 @@ function headingFontBump(level: number | undefined): number {
   return level !== undefined ? HEADING_FONT_BUMP[level] ?? 1 : 8;
 }
 
-// The reading column's width (`contentWidth`) is tuned for text line length,
+// The reading column's width (--reader-max-width) is tuned for text line length,
 // not for a portrait cover image — full-width there reads as bloated on a
 // wide pane. Front-matter cover images alone get capped below that; every
 // other image in the book still renders at the full column width exactly
 // as its own dimensions call for. This is just the *cap* — ImagePassageBlock
 // itself resolves it against the actual rendered column width (which is
-// already bounded by contentWidth through its own ancestor, and by the real
+// already bounded by --reader-max-width through its own ancestor, and by the real
 // viewport on any screen narrower than that) via a CSS `min()`, so a
-// contentWidth or screen narrower than 340 shrinks the cover to fit rather
+// column or screen narrower than 340 shrinks the cover to fit rather
 // than this constant overriding it. No JS-side `Math.min` against
-// contentWidth needed here as a result — see ImagePassageBlock's comment.
+// the column width needed here as a result — see ImagePassageBlock's comment.
 const FRONT_COVER_MAX_WIDTH_PX = 340;
 
 type BookContentProps = {
@@ -35,16 +35,12 @@ type BookContentProps = {
   onPointerUp: (e: React.PointerEvent) => void;
   onAnyClick: () => void;
   contentPad: string;
-  contentWidth: number;
   contentTopPad: number;
   contentBottomPad: number;
   orderedSections: Section[];
   notesIndexSectionId: string | null;
   notesIndexGroups: { heading: Passage; notes: BookDocument["notes"] }[] | null;
   getAnnotations: (passageId: string) => Annotation[];
-  fontSize: number;
-  lineHeight: number;
-  fontFamilyVar: string;
   notesById: Map<string, NoteLookup>;
   onNoteClick: (note: NoteLookup, target: HTMLElement) => void;
   onInternalLinkClick: (sectionId: string, fragmentId?: string) => void;
@@ -99,16 +95,12 @@ const BookContent = memo(function BookContent({
   onPointerUp,
   onAnyClick,
   contentPad,
-  contentWidth,
   contentTopPad,
   contentBottomPad,
   orderedSections,
   notesIndexSectionId,
   notesIndexGroups,
   getAnnotations,
-  fontSize,
-  lineHeight,
-  fontFamilyVar,
   notesById,
   onNoteClick,
   onInternalLinkClick,
@@ -145,7 +137,7 @@ const BookContent = memo(function BookContent({
     const headingBump = isPartDivider ? 14 : headingFontBump(raw.level);
     const textAlign = raw.align ?? (isHeading && isPartDivider ? "center" : isFrontCoverImage ? "center" : "left");
     const marginTop = isHeading ? (isPartDivider ? 40 : 24) : isCode ? 20 : isBlockquote ? 18 : isTable ? 24 : 0;
-    const marginBottom = `${((16 * lineHeight) / 1.7).toFixed(0)}px`;
+    const marginBottom = "var(--reader-paragraph-spacing)";
     const canPlayPassage = Boolean(onPassagePlayback && raw.text.trim() && !isHeading && !isImage && !isTable);
     const isCurrentPassage = currentPlayingPassageId === raw.id;
     const narrationClass = canPlayPassage
@@ -227,10 +219,10 @@ const BookContent = memo(function BookContent({
     );
 
     const sharedStyle: React.CSSProperties = {
-      fontFamily: fontFamilyVar,
+      fontFamily: "var(--reader-font-family)",
       fontWeight: isHeading ? 700 : 400,
-      fontSize: isHeading ? fontSize + headingBump : fontSize,
-      lineHeight: isHeading ? 1.3 : lineHeight,
+      fontSize: isHeading ? `calc(var(--reader-font-size) + ${headingBump}px)` : "var(--reader-font-size)",
+      lineHeight: isHeading ? 1.3 : "var(--reader-line-height)",
       color: "var(--reader-text)",
       textAlign,
       ...(isHeading && isPartDivider
@@ -267,7 +259,7 @@ const BookContent = memo(function BookContent({
       ) => {
         const cellStyle = {
           textAlign: cell.align ?? "left",
-          fontFamily: fontFamilyVar,
+          fontFamily: "var(--reader-font-family)",
           color: "var(--reader-text)",
         };
         // schemaVersion >= 4: cell.marks carries inline formatting/note refs
@@ -453,7 +445,7 @@ const BookContent = memo(function BookContent({
             style={{
               paddingLeft: 0,
               marginTop: 0,
-              marginBottom: `${((16 * lineHeight) / 1.7).toFixed(0)}px`,
+              marginBottom: "var(--reader-paragraph-spacing)",
             }}
             start={items[0].listStart}
           >
@@ -469,7 +461,7 @@ const BookContent = memo(function BookContent({
             style={{
               paddingLeft: 0,
               marginTop: 0,
-              marginBottom: `${((16 * lineHeight) / 1.7).toFixed(0)}px`,
+              marginBottom: "var(--reader-paragraph-spacing)",
             }}
           >
             {items.map((item) => renderPassage(item, true))}
@@ -500,14 +492,16 @@ const BookContent = memo(function BookContent({
         // slide by Reader.tsx) — on iOS, keeping native selection off is the
         // only way to keep the system's Copy/Look Up menu from appearing
         // alongside our own. no-callout keeps the long-press callout away too.
-        className={`reader-fade-in om-scroll h-full overflow-y-auto relative select-none no-callout${
+        // isolate: the selection's wash sits behind the text, stopping at
+        // this slide's own background.
+        className={`reader-fade-in om-scroll h-full overflow-y-auto relative isolate select-none no-callout${
           isNarrationPlaying ? " om-listen-active" : ""
         }`}
         style={{ background: "var(--reader-bg)" }}
       >
         <div
           className={`mx-auto box-border ${contentPad}`}
-          style={{ maxWidth: contentWidth, paddingTop: contentTopPad, paddingBottom: contentBottomPad }}
+          style={{ maxWidth: "var(--reader-max-width)", paddingTop: contentTopPad, paddingBottom: contentBottomPad }}
         >
           {section.id === firstSectionId && (
             // Inline byline — book title/author live in the scrolling

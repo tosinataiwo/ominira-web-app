@@ -30,7 +30,7 @@ function QuotePanel({ className = "" }: { className?: string }) {
           <Wordmark />
         </div>
       </div>
-      <blockquote className="mt-6 font-serif text-2xl text-[var(--reader-text)] leading-[1.25] font-medium shell:mt-10 shell:text-[28px]">
+      <blockquote className="font-serif text-[20px] font-bold mt-6 text-[var(--reader-text)] shell:mt-10">
       What matters is not to know the world but to change it.
       </blockquote>
       <div className="mt-4 text-xs font-bold tracking-[0.1em] text-brand-400">— Frantz Fanon, Black Skin, White Masks</div>
@@ -49,8 +49,8 @@ function LoginForm() {
 
   return (
     <div className="w-full max-w-sm">
-      <h1 className="font-serif text-3xl font-semibold text-[var(--reader-text)]">Welcome back.</h1>
-      <p className="mt-2 font-literata text-[14px] text-[var(--reader-text-muted)]">Log in to continue your journey of consciousness.</p>
+      <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">Welcome back.</h1>
+      <p className="mt-2 text-[14px] font-medium text-[var(--reader-text-muted)]">Log in to continue your journey of consciousness.</p>
 
       <form
         className="mt-8 space-y-5"

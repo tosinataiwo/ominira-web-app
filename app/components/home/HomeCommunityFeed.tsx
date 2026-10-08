@@ -61,7 +61,7 @@ export default function HomeCommunityFeed() {
       <FeaturedThisWeek />
 
       <div className="mt-1 mb-7">
-        <h1 className="m-0 font-serif text-xl font-bold text-[var(--reader-text)]">Community notes</h1>
+        <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">Community notes</h1>
       </div>
 
       <div className="mb-10">

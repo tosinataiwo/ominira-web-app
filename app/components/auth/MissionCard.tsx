@@ -33,10 +33,10 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
       <div className="relative flex flex-col items-start gap-7 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col items-start gap-4">
           <div className="flex flex-col items-start gap-2">
-            <h2 className="m-0 max-w-full font-serif text-xl font-bold leading-tight text-[var(--reader-text)] sm:text-2xl">
+            <h2 className="font-serif type-3 text-balance m-0 max-w-full text-[var(--reader-text)]">
               Online space for revolutionary Pan-Africanists to study as a collective.
             </h2>
-            <p className="m-0 font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
+            <p className="m-0 font-serif text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
               We are studying to change our world. Become a part of this project.
             </p>
           </div>
@@ -64,7 +64,7 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
             className="h-20 w-20 flex-none object-cover object-[48%_20%] sm:h-24 sm:w-24"
           />
           <div>
-            <blockquote className="m-0 font-serif text-[13px] font-semibold italic leading-snug text-[var(--reader-text)]">
+            <blockquote className="m-0 font-serif italic text-[13px] font-semibold leading-snug text-[var(--reader-text)]">
               {/* &ldquo;The most potent weapon in the hands of the oppressor is the mind of the oppressed.&rdquo; */}
               &ldquo; Every African has a responsibility to understand the neocolonial system and work for its overthrow. &rdquo;
             </blockquote>

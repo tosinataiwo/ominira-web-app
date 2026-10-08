@@ -62,7 +62,7 @@ export default function HighlightCard({
           `!expanded`), rather than turning into a "See less" toggle — once
           a reader's asked for the full passage there's no reason to hide
           it again mid-read. */}
-      <p className="m-0 font-serif text-[15px] leading-[1.8] text-[var(--color-app-text)]">
+      <p className="m-0 font-serif text-[15px] leading-[1.65] text-[var(--color-app-text)]">
         {expanded ? text : shown}
         {isTruncated && !expanded && (
           <>

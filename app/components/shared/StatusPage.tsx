@@ -25,7 +25,7 @@ export default function StatusPage({
     <main
       className={`flex flex-col items-center justify-center gap-3 bg-[var(--reader-bg)] px-6 text-center ${className}`}
     >
-      <h1 className="m-0 font-serif text-xl font-semibold text-[var(--reader-text)]">{title}</h1>
+      <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">{title}</h1>
       {children && <p className="m-0 max-w-sm text-sm text-[var(--reader-text-muted)]">{children}</p>}
       {action && <div className="mt-2">{action}</div>}
       <Link

@@ -50,7 +50,7 @@ export type RoomSnapshot = {
   ended: { endedAt: string } | null;
   /** This tab yielded to a newer one of the same reader (spec §8.2). */
   elsewhere: boolean;
-  /** Who you follow, where the readers sending `pos` are, a pending summon (follow.ts). */
+  /** Who you follow, where the readers sending `pos` are, (follow.ts). */
   follow: FollowSnapshot;
   /** The speakers' selections by readerId, for the speaker band (spec §3.1). */
   highlights: Record<string, SpeakerHighlight>;
@@ -58,6 +58,21 @@ export type RoomSnapshot = {
   chat: ChatSnapshot;
   /** Reactions rising now, yours included (reactions.ts). */
   rising: RisingReaction[];
+  /** Your narration is what your mic sends now (setNarration). */
+  readingAloud: boolean;
+  /** The word another speaker's read-aloud narration is on, for the word highlight. */
+  narration: RoomNarration | null;
+};
+
+export type RoomNarration = { readerId: string; passageId: string; index: number };
+
+/** The reader's narration while it plays, for setNarration: its track, and
+ * its word (null between passages, while the next one loads). */
+export type LocalNarration = {
+  track: MediaStreamTrack;
+  /** The narrator voice, shown to the room as who's reading. */
+  voice: string;
+  word: { passageId: string; index: number } | null;
 };
 
 export type SpeakerHighlight = { ranges: AnnotationRange[]; at: number };
@@ -94,14 +109,21 @@ type Engine = {
   mesh: Mesh<MeshEntry>;
   mic: Mic;
   playback: Playback;
-  /** The mic track while on, handed to new peers. */
+  /** What peers are sent, handed to new ones: the narration while it plays
+   * with the mic on, else the mic track while on. */
   track: MediaStreamTrack | null;
+  micTrack: MediaStreamTrack | null;
+  narrationTrack: MediaStreamTrack | null;
+  /** The last `narration` word sent, so an unchanged one isn't sent again. */
+  narrationKey: string;
   roster: RoomPresence[];
   follow: Follow;
   chat: Chat;
   reactions: Reactions;
   /** The last `highlight` sent, so an unchanged one isn't sent again. */
   highlightKey: string;
+  /** Who follows you, so a new follower is sent your selection at once. */
+  followerKey: string;
   /** For the leave beacon. */
   stats: RoomLeaveStats;
 };
@@ -176,6 +198,24 @@ export class RoomSession {
     this.textChanged();
   }
 
+  /** The reader's narration of this room's book, playing, or null. With the
+   * mic on it goes to listeners in place of the mic — speech and narration
+   * take turns, so neither echoes the other — and its word is broadcast for
+   * their highlight. */
+  setNarration(narration: LocalNarration | null): void {
+    const engine = this.engine;
+    if (!engine) return;
+    engine.narrationTrack = narration?.track ?? null;
+    this.sendTrack();
+    const readingAloud = narration && engine.track === narration.track ? narration.voice : null;
+    if (this.presence && this.presence.readingAloud !== readingAloud) this.updatePresence({ readingAloud });
+    const word = narration && engine.track === narration.track ? narration.word : null;
+    const key = JSON.stringify(word);
+    if (key === engine.narrationKey) return;
+    engine.narrationKey = key;
+    engine.channel.send("narration", { from: this.readerId, word });
+  }
+
   raiseHand(): void {
     if (this.presence?.handRaisedAt === null) this.updatePresence({ handRaisedAt: Date.now() });
   }
@@ -214,14 +254,6 @@ export class RoomSession {
   /** Moderators (spec §12). False when you're not in the book's reader. */
   summonEveryone(): boolean {
     return this.engine?.follow.summonEveryone() ?? false;
-  }
-
-  jumpToSummon(): void {
-    this.engine?.follow.jumpToSummon();
-  }
-
-  dismissSummon(): void {
-    this.engine?.follow.dismissSummon();
   }
 
   // ── Chat (spec §1.4) ──
@@ -286,6 +318,7 @@ export class RoomSession {
       sends: false,
       micOnAt: null,
       handRaisedAt: null,
+      readingAloud: null,
       followingId: null,
       // follow.ts sets these once the book's reader is open.
       progressPct: 0,
@@ -312,6 +345,8 @@ export class RoomSession {
       highlights: {},
       chat: CHAT_EMPTY,
       rising: [],
+      readingAloud: false,
+      narration: null,
     });
 
     const channel = this.deps.openRoomChannel({
@@ -327,7 +362,22 @@ export class RoomSession {
         this.reconcile();
         engine.follow.setRoster(roster);
         engine.chat.setRoster(roster);
-        this.patch({ roster, highlights: keepMembers(this.snapshot?.highlights ?? {}, roster) });
+        const narration = this.snapshot?.narration;
+        this.patch({
+          roster,
+          highlights: keepMembers(this.snapshot?.highlights ?? {}, roster),
+          narration: narration && roster.some((p) => p.readerId === narration.readerId) ? narration : null,
+        });
+        // A new follower gets your selection now; losing the last clears it.
+        const followerKey = roster
+          .filter((p) => p.followingId === this.readerId && p.readerId !== this.readerId)
+          .map((p) => p.readerId)
+          .join();
+        if (followerKey !== engine.followerKey) {
+          engine.followerKey = followerKey;
+          engine.highlightKey = "";
+        }
+        this.sendHighlight();
       },
       onStatus: (connection) => {
         // Back after a drop: one reconcile; peers already up were never touched (spec §8.8).
@@ -386,9 +436,8 @@ export class RoomSession {
 
     const mic = this.deps.createMic({
       onChange: (micState, track) => {
-        engine.track = track;
-        for (const { peer } of mesh.peers.values()) peer.setTrack(track);
-        playback.setLocal(sessionId, track);
+        engine.micTrack = track;
+        this.sendTrack();
         this.patch({ micState });
       },
     });
@@ -429,11 +478,15 @@ export class RoomSession {
       mic,
       playback,
       track: null,
+      micTrack: null,
+      narrationTrack: null,
+      narrationKey: "null",
       roster: [],
       follow,
       chat,
       reactions,
       highlightKey: "null",
+      followerKey: "",
       stats: { peakMics: 0, peakPeers: 0, iceRestarts: 0, usedTurn: false },
     };
     this.engine = engine;
@@ -446,6 +499,13 @@ export class RoomSession {
       if (ranges?.length) highlights[from] = { ranges, at: Date.now() };
       else delete highlights[from];
       this.patch({ highlights });
+    });
+
+    channel.on("narration", ({ from, word }) => {
+      if (from === this.readerId) return;
+      const current = this.snapshot?.narration ?? null;
+      if (word) this.patch({ narration: { readerId: from, ...word } });
+      else if (current?.readerId === from) this.patch({ narration: null });
     });
 
     channel.on("ended", async (event) => {
@@ -533,6 +593,8 @@ export class RoomSession {
       follow: FOLLOW_IDLE,
       highlights: {},
       rising: [],
+      readingAloud: false,
+      narration: null,
     });
     await this.teardown();
   }
@@ -551,19 +613,36 @@ export class RoomSession {
     await engine.channel.close();
   }
 
+  /** Sends peers the narration while it plays with the mic on, else the mic. */
+  private sendTrack(): void {
+    const engine = this.engine;
+    if (!engine || !this.snapshot) return;
+    const track = engine.micTrack && engine.narrationTrack ? engine.narrationTrack : engine.micTrack;
+    if (track === engine.track) return;
+    engine.track = track;
+    for (const { peer } of engine.mesh.peers.values()) peer.setTrack(track);
+    engine.playback.setLocal(this.snapshot.sessionId, track);
+    this.patch({ readingAloud: track !== null && track === engine.narrationTrack });
+  }
+
   /** Mic on or off: your place may now be wanted, your selection shown or cleared. */
   private textChanged(): void {
     this.engine?.follow.moved();
     this.sendHighlight();
   }
 
-  /** Your selection while your mic is on in the book's reader, else nothing;
-   * sent on change only. Positions only: receivers have the text. */
+  /** Your selection in the book's reader while your mic is on or someone
+   * follows you, else nothing; sent on change only. Positions only:
+   * receivers have the text. */
   private sendHighlight(): void {
     const engine = this.engine;
     if (!engine || !this.presence) return;
+    const me = this.readerId;
+    const followed = engine.roster.some((p) => p.followingId === me && p.readerId !== me);
     const shown =
-      this.presence.micOnAt !== null && this.view?.materialId === this.snapshot?.room.materialId && this.selection?.length
+      (this.presence.micOnAt !== null || followed) &&
+      this.view?.materialId === this.snapshot?.room.materialId &&
+      this.selection?.length
         ? this.selection.slice(0, MAX_HIGHLIGHT_RANGES).map(({ passageId, start, end }) => ({ passageId, start, end }))
         : null;
     const key = JSON.stringify(shown);

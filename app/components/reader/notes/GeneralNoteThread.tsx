@@ -6,7 +6,7 @@ import type { Note } from "@/lib/api/types";
 import NoteThreadCard from "./NoteThreadCard";
 
 /** One book-level note in the "General discussion" section of the book-wide
- * feed (BookAnnotationFeedPanel) — a note with no `ranges`, so unlike
+ * feed (FeedPanel) — a note with no `ranges`, so unlike
  * FeedHighlightThread there's no quote, no "jump to passage" (there's no
  * passage to jump to), and no shared per-highlight root composer: every
  * general note is its own independent card, same "one root note + its own

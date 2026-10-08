@@ -71,7 +71,7 @@ export default function NoteContent({
           of leading pushing the reaction row down further than a note that
           actually has visible content above it. */}
       {content.text.trim() !== "" && (
-        <p className="m-0 min-w-0 whitespace-pre-wrap break-words text-[15px] font-literata font-normal leading-[1.8] text-[var(--reader-text)]">
+        <p className="m-0 min-w-0 whitespace-pre-wrap break-words font-serif type-4 text-[var(--reader-text)]">
           {linkify(displayedText).map((part, i) =>
             typeof part === "string" ? (
               <span key={i}>{part}</span>

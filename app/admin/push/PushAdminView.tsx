@@ -540,7 +540,7 @@ function FeedPreview({ title, body }: { title: string; body: string }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-[13px] leading-[1.45] text-[var(--reader-text)]">{title.trim()}</span>
-        <span className="line-clamp-2 font-literata text-[13px] italic leading-[1.6] text-[var(--reader-text-muted)]">{body.trim()}</span>
+        <span className="line-clamp-2 font-serif text-[13px] italic leading-[1.6] text-[var(--reader-text-muted)]">{body.trim()}</span>
         <span className="text-[11px] font-semibold tracking-wide text-[var(--reader-text-subtle)]">just now</span>
       </span>
     </div>
@@ -571,7 +571,7 @@ function AudienceRow({ icon, label, value, info }: { icon: React.ReactNode; labe
     <li className="flex items-center gap-2">
       <span className="text-[var(--reader-text-subtle)]">{icon}</span>
       <span className="flex-1 text-[13px] font-semibold text-[var(--reader-text-muted)]">{label}</span>
-      <span className="font-literata text-[18px] font-semibold tabular-nums text-[var(--reader-text)]">{n(value)}</span>
+      <span className="font-serif text-[18px] font-semibold tabular-nums text-[var(--reader-text)]">{n(value)}</span>
       <InfoTip label={label}>{info}</InfoTip>
     </li>
   );

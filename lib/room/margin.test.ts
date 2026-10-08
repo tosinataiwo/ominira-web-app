@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RoomPlace, RoomPresence } from "./events";
-import { selectBand, selectMargin, selectReadingCount, spreadLines } from "./margin";
+import { selectBand, selectMargin, spreadLines } from "./margin";
 
 const member = (readerId: string, extra: Partial<RoomPresence> = {}): RoomPresence => ({
   readerId,
@@ -12,6 +12,7 @@ const member = (readerId: string, extra: Partial<RoomPresence> = {}): RoomPresen
   sends: false,
   micOnAt: null,
   handRaisedAt: null,
+  readingAloud: null,
   followingId: null,
   progressPct: 0,
   mode: "read",
@@ -45,14 +46,6 @@ describe("selectMargin", () => {
   });
 });
 
-describe("selectReadingCount", () => {
-  test("everyone else in the reader, minus the margin", () => {
-    const roster = [member("me"), member("a"), member("b"), member("c", { inReader: false }), member("d")];
-    expect(selectReadingCount(roster, "me", ["d"])).toBe(2);
-    expect(selectReadingCount(roster, "me", [])).toBe(3);
-    expect(selectReadingCount([member("me")], "me", [])).toBe(0);
-  });
-});
 
 describe("selectBand", () => {
   const ranges = [{ passageId: "p1", start: 0, end: 5 }];
@@ -67,6 +60,12 @@ describe("selectBand", () => {
     expect(selectBand(roster, highlights, "me")?.member.readerId).toBe("sekou");
     expect(selectBand(roster, { ada: highlights.ada }, "me")?.member.readerId).toBe("ada");
     expect(selectBand(roster, { kofi: highlights.kofi, me: highlights.me }, "me")).toBeNull();
+  });
+  test("whoever you follow, mic or not", () => {
+    const roster = [member("me"), member("ada", { micOnAt: 2 }), member("kofi")];
+    const highlights = { ada: { ranges, at: 10 }, kofi: { ranges, at: 30 } };
+    expect(selectBand(roster, highlights, "me", "kofi")?.member.readerId).toBe("kofi");
+    expect(selectBand(roster, highlights, "me", null)?.member.readerId).toBe("ada");
   });
 });
 

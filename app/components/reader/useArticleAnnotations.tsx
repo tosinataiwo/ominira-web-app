@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from "react";
 import { createDomSurface, indexedBlockId, indexOfBlockId } from "@/lib/annotations/surface";
 import type { FeedLocation, FeedLocator } from "@/lib/reader/annotationFeed";
 import { articleBlocks } from "@/lib/reader/useArticleProgress";
-import type { useArticleTypographyStyle } from "@/lib/reader/useArticleTypographyStyle";
 import { articleView } from "@/lib/room/view";
 import { useRoomView } from "@/lib/room/useRoomView";
 import { DomHighlights, useDocumentAnnotations } from "./DocumentAnnotations";
@@ -31,8 +30,8 @@ export function useArticleAnnotations({
   title,
   contentRef,
   scrollElement,
-  typography,
   ready,
+  onListenFrom,
 }: {
   materialId: string;
   /** Labels the notes feed's run for text before the first heading. */
@@ -40,9 +39,10 @@ export function useArticleAnnotations({
   /** useArticleProgress's content ref, called through. */
   contentRef: (el: HTMLDivElement | null) => void;
   scrollElement: HTMLDivElement | null;
-  typography: ReturnType<typeof useArticleTypographyStyle>;
   /** The reader has landed (useArticleProgress's resumeApplied). */
   ready: boolean;
+  /** "Listen from here" on a selection — see useDocumentAnnotations. */
+  onListenFrom?: (block: string, offset: number) => void;
 }) {
   const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
   const attachContent = useCallback(
@@ -84,17 +84,16 @@ export function useArticleAnnotations({
     },
     [contentEl]
   );
-  // Typography changes reflow the text under the highlights and selection.
-  const layoutKey = `${typography.fontFamily}|${typography.fontSize}|${typography.lineHeight}|${typography.maxWidth}`;
 
   const { annotations, onMarkClick, chrome } = useDocumentAnnotations({
     materialId,
     surface,
     scrollEl: scrollElement,
-    layoutKey,
     getPassageText,
     locate,
     jumpToBlock,
+    selectionBeneath: true,
+    onListenFrom,
   });
 
   // The article as a live room sees it (lib/room/view.ts).
@@ -113,7 +112,6 @@ export function useArticleAnnotations({
       scrollEl={scrollElement}
       annotations={annotations.annotations}
       onMarkClick={onMarkClick}
-      layoutKey={layoutKey}
     />
   );
 

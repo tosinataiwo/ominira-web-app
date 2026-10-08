@@ -150,7 +150,7 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
                       {r.sectionTitle}
                     </span>
                   </div>
-                  <p className="mt-1.5 font-literata text-[14px] leading-[1.65] text-[var(--reader-text)]">
+                  <p className="mt-1.5 font-serif type-4 text-[14px] text-[var(--reader-text)]">
                     {highlight(r.text, query)}
                   </p>
                 </div>

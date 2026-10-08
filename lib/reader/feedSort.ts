@@ -3,7 +3,7 @@ import type { Annotation } from "@/stores/library-store";
 import { lastActivityAt, repliesFor } from "./noteThread";
 
 /** "book" — General discussion first, then every highlight in spine
- * order, same as browsing the book itself (`useBookAnnotationFeed`'s own
+ * order, same as browsing the book itself (`useFeed`'s own
  * default, and currently the only one actually reachable — there's no UI
  * control for this anymore; a native `<select>` here fought mobile
  * Safari's 16px-floor anti-zoom rule and looked oversized, so it was
@@ -36,7 +36,7 @@ export function annotationSortKey(annotation: Annotation, sort: "recent" | "top"
 /** One General discussion note's own sort key — mirrors
  * `annotationSortKey`, just sourced from a flat note + its replies instead
  * of an Annotation. Never called for "book" — that mode doesn't rank
- * notes against each other at all (see useBookAnnotationFeed's own
+ * notes against each other at all (see useFeed's own
  * `items`). */
 export function generalNoteSortKey(note: Note, allNotes: Note[], sort: "recent" | "top"): number {
   const replies = repliesFor(allNotes, note.id);

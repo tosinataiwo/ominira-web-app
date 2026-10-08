@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { SendHorizontal, X } from "lucide-react";
+import { ArrowDown, X } from "lucide-react";
+import ComposerBox from "@/app/components/reader/notes/ComposerBox";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import QuoteCard from "@/app/components/reader/notes/QuoteCard";
 import { comradeName } from "@/lib/reader/authorDisplay";
@@ -13,12 +14,12 @@ import { useSendPassage } from "@/lib/room/sharePassage";
 import { useNow } from "@/lib/time/useNow";
 import { useRoomStore } from "@/stores/room-store";
 
-// The Room chat tab of the notes rail (spec §1.4, §3.2), desktop rail and
-// mobile notes panel alike: the notice first, then messages, shared passages
-// and reaction digests as they come, and the composer in the panel's footer.
-// Loaded by BookAnnotationFeedPanel only while you're in the room on this book.
+// The room's chat, the last section of the feed panel's Room tab (spec §1.4,
+// §3.2): the notice first, then messages, shared passages and reaction
+// digests as they come, and the composer in the panel's footer.
+// Loaded with the Room tab, only while you're in the room on this book.
 
-/** Within this of the bottom, a new message keeps the list at the bottom. */
+/** Within this of the bottom, you're at the end: new lines keep you there. */
 const PINNED_PX = 80;
 
 export function RoomChatList() {
@@ -27,8 +28,18 @@ export function RoomChatList() {
   const session = useRoomStore((s) => s.session);
   const now = useNow(30_000);
   const endRef = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true);
-  const count = chat?.items.length ?? 0;
+  const last = chat?.items.at(-1);
+  // The newest line's time: still moves once the list is full (MAX_CHAT_ITEMS).
+  const lastAt = last?.at ?? 0;
+  // Only someone else's message is news; your own takes you to the end.
+  const othersAt = chat?.items.findLast((i) => i.kind === "message" && i.readerId !== me)?.at ?? 0;
+  const othersAtRef = useRef(othersAt);
+  // Whether the end of the chat is on screen. Not at first, so opening the
+  // tab doesn't jump past who's here.
+  const [atEnd, setAtEnd] = useState(false);
+  const atEndRef = useRef(false);
+  // The newest message from someone else you'd seen when you left the end.
+  const [seenAt, setSeenAt] = useState(othersAt);
 
   // On screen: nothing is unread.
   useEffect(() => {
@@ -37,40 +48,54 @@ export function RoomChatList() {
   }, [session]);
 
   useEffect(() => {
-    const scroller = endRef.current?.closest<HTMLElement>(".om-scroll");
-    if (!scroller) return;
-    const onScroll = () => {
-      pinned.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < PINNED_PX;
-    };
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    return () => scroller.removeEventListener("scroll", onScroll);
+    const end = endRef.current;
+    const root = end?.closest<HTMLElement>(".om-scroll");
+    if (!end || !root) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        atEndRef.current = entry.isIntersecting;
+        setAtEnd(entry.isIntersecting);
+        setSeenAt(othersAtRef.current);
+      },
+      { root, rootMargin: `0px 0px ${PINNED_PX}px 0px` },
+    );
+    io.observe(end);
+    return () => io.disconnect();
   }, []);
 
+  const mine = last?.kind === "message" && last.readerId === me;
   useLayoutEffect(() => {
+    othersAtRef.current = othersAt;
     const scroller = endRef.current?.closest<HTMLElement>(".om-scroll");
-    if (scroller && pinned.current) scroller.scrollTop = scroller.scrollHeight;
-  }, [count]);
+    if (scroller && (atEndRef.current || mine)) scroller.scrollTop = scroller.scrollHeight;
+  }, [lastAt, othersAt, mine]);
 
   if (!chat) return null;
   return (
-    <div className="flex flex-col gap-4 pt-4">
-      <p className="m-0 rounded-sm bg-[var(--reader-surface-hover)] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[var(--reader-text-muted)]">
-        Chat and reactions clear when the room ends. To keep something, save it as a note.
-      </p>
+    <div className="flex flex-col gap-4">
       {chat.items.length === 0 ? (
-        <p className="m-0 py-6 text-center text-[13px] text-[var(--reader-text-muted)]">
-          Nothing said yet. Say hello to the room.
-        </p>
+        <p className="m-0 py-2 text-[13px] text-[var(--reader-text-muted)]">Nothing said yet. Say hello to the room.</p>
       ) : (
         chat.items.map((item) =>
           item.kind === "digest" ? (
             <Digest key={item.id} item={item} />
           ) : (
-            <Message key={item.id} item={item} person={chat.people[item.readerId]} mine={item.readerId === me} now={now} />
+            <Message key={item.id} item={item} person={chat.people[item.readerId]} now={now} />
           ),
         )
       )}
       <div ref={endRef} />
+      {/* Away from the end when someone says something: a way down to it. */}
+      {!atEnd && othersAt > seenAt && (
+        <button
+          type="button"
+          onClick={() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })}
+          className="reader-face-in sticky bottom-3 flex h-8 cursor-pointer items-center gap-1 self-center rounded-full bg-brand-500 pr-3 pl-2.5 text-xs font-bold text-white shadow-md"
+        >
+          <ArrowDown size={14} strokeWidth={2.5} />
+          New messages
+        </button>
+      )}
     </div>
   );
 }
@@ -78,12 +103,10 @@ export function RoomChatList() {
 function Message({
   item,
   person,
-  mine,
   now,
 }: {
   item: Extract<ChatItem, { kind: "message" }>;
   person: ChatPerson | undefined;
-  mine: boolean;
   now: number;
 }) {
   const name = person ? comradeName(person.name) : "A comrade";
@@ -94,9 +117,8 @@ function Message({
         <span className="flex items-baseline gap-1.5 text-[12px]">
           <span className="truncate font-semibold text-[var(--reader-text)]">
             {name}
-            {mine && <span className="font-normal text-[var(--reader-text-muted)]"> (you)</span>}
           </span>
-          <span className="flex-none text-[var(--reader-text-subtle)]">{formatShortTimeAgo(item.at, now)}</span>
+          <span className="flex-none text-[11px] font-medium text-[var(--reader-text-subtle)]">{formatShortTimeAgo(item.at, now)} ago</span>
         </span>
         {item.passage && (
           <QuoteCard>
@@ -107,7 +129,7 @@ function Message({
             </span>
           </QuoteCard>
         )}
-        <p className="m-0 text-[14px] leading-snug break-words whitespace-pre-wrap text-[var(--reader-text)]">{item.text}</p>
+        <p className="m-0 text-[13px] break-words whitespace-pre-wrap text-[var(--reader-text-muted)]">{item.text}</p>
       </div>
     </div>
   );
@@ -115,14 +137,17 @@ function Message({
 
 function Digest({ item }: { item: Extract<ChatItem, { kind: "digest" }> }) {
   return (
-    <p className="m-0 flex items-center justify-center gap-1.5 text-center text-[12px] font-semibold text-[var(--reader-text-muted)]">
+    <p className="m-0 flex items-center gap-2 text-xs font-medium text-[var(--reader-text-muted)]">
+      <span className="h-px flex-1 bg-[var(--reader-border)]" />
       <span aria-hidden="true">{item.emojis.join(" ")}</span>
-      {item.text}
+      <span className="max-w-[75%] text-center">{item.text}</span>
+      <span className="h-px flex-1 bg-[var(--reader-border)]" />
     </p>
   );
 }
 
-/** "Message the room" + send, in the panel's footer. Enter sends, Shift+Enter
+/** "Message the room" + send, in the panel's footer: the note composer's
+ * box (ComposerBox): just the writing and Send. Enter sends, Shift+Enter
  * starts a new line. Within 2 s of your last message, it's kept and the
  * rate is explained. A passage shared from the reader waits above the box,
  * and your words go with it: saved as a note, then posted (sharePassage.ts). */
@@ -167,7 +192,26 @@ export function RoomChatComposer({ materialId }: { materialId: string }) {
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <ComposerBox
+      inputRef={inputRef}
+      value={text}
+      onChange={setText}
+      placeholder={passage ? "Say something about it" : "Message the room"}
+      label="Message the room"
+      maxLength={MAX_CHAT_LENGTH}
+      submitOnEnter
+      immersive={false}
+      canPost={!!text.trim() && !saving && connecting === false}
+      postLabel={passage ? "Share to room" : "Send"}
+      onPost={() => void send()}
+      footer={
+        notice && (
+          <p role="status" className="m-0 text-[11px] text-[var(--reader-text-muted)]">
+            {notice}
+          </p>
+        )
+      }
+    >
       {passage && (
         <div className="flex items-start gap-2 rounded-sm border border-[var(--reader-border)] bg-[var(--color-app-surface-muted)] py-2 pr-1.5 pl-3">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -187,46 +231,9 @@ export function RoomChatComposer({ materialId }: { materialId: string }) {
           </button>
         </div>
       )}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send();
-        }}
-        className="flex items-end gap-2 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] py-1.5 pr-1.5 pl-3.5 focus-within:border-[var(--reader-accent)]"
-      >
-        <textarea
-          ref={inputRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-          rows={1}
-          maxLength={MAX_CHAT_LENGTH}
-          placeholder={passage ? "Say something about it" : "Message the room"}
-          aria-label="Message the room"
-          className="field-sizing-content max-h-28 min-h-8 flex-1 resize-none border-none bg-transparent py-1.5 text-[14px] leading-snug text-[var(--reader-text)] outline-none placeholder:text-[var(--reader-text-subtle)]"
-        />
-        <button
-          type="submit"
-          disabled={!text.trim() || saving || connecting !== false}
-          aria-label={passage ? "Share to room" : "Send"}
-          title={passage ? "Share to room" : "Send"}
-          className="flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-sm bg-[var(--reader-accent)] text-[var(--reader-bg)] transition-opacity disabled:cursor-default disabled:opacity-40"
-        >
-          <SendHorizontal size={16} strokeWidth={2.25} />
-        </button>
-      </form>
-      {notice && (
-        <p role="status" className="m-0 text-[11px] text-[var(--reader-text-muted)]">
-          {notice}
-        </p>
-      )}
-    </div>
+    </ComposerBox>
   );
 }
 
 const SLOW = "One message every 2 seconds. Yours is still here.";
+

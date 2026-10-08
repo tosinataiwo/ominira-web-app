@@ -7,36 +7,35 @@ import NoResults from "@/app/components/shared/NoResults";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import type { FeedEntry } from "@/lib/reader/annotationFeed";
-import type { AnnotationFeedFilter, FeedItem } from "@/lib/reader/useBookAnnotationFeed";
+import type { FeedItem, FeedTab } from "@/lib/reader/useFeed";
 import type { Note } from "@/lib/api/types";
 import { useCreateNote } from "@/lib/community/useNoteMutations";
 import UnderlineTabs from "../../UnderlineTabs";
 import PanelShell from "./PanelShell";
 import LiveChip from "@/app/components/room/LiveChip";
+import UnreadBadge from "@/app/components/room/UnreadBadge";
 import FeedHighlightThread from "./FeedHighlightThread";
 import GeneralNoteThread from "./GeneralNoteThread";
 import NoteComposer from "./NoteComposer";
 import { notesLabel } from "../ReaderPresence";
 import { roomChatUnread, useRoomStore } from "@/stores/room-store";
 
-// The room's chat tab, loaded only while you're in the room on this book.
-const RoomChatList = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatList), { ssr: false });
+// The Room tab, loaded only while you're in the room on this book.
+const RoomStage = dynamic(() => import("@/app/components/room/RoomPanel").then((m) => m.RoomStage), { ssr: false });
 const RoomChatComposer = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatComposer), {
   ssr: false,
 });
 
-// Same two-tab split as book details' own Table of contents/Community notes
-// switch (UnderlineTabs), just this panel's own two views — every entry is
-// exactly one or the other (see AnnotationFeedFilter's own doc comment), so
-// there's no third "All" to combine them back into. Labeled just "Notes",
-// not "Public notes" — this tab's own data (GET /api/materials/{id}/notes)
-// already mixes in the reader's own private notes/replies alongside public
-// ones (visibleToFilter: public OR mine), so "Public" was never quite
-// accurate here; each private entry marks itself instead (see AuthorRow's
-// own "Only you" chip).
-const FILTER_OPTIONS: { value: AnnotationFeedFilter; label: string }[] = [
+// Notes and Highlights split every entry between them (see FeedTab's doc
+// comment), so there's no "All" to combine them back into. Labeled just
+// "Notes", not "Public notes" — this tab's own data (GET
+// /api/materials/{id}/notes) already mixes in the reader's own private
+// notes/replies alongside public ones, so each private entry marks itself
+// instead (see AuthorRow's own "Only you" chip). Room follows them while
+// you're in the room on this book.
+const FILTER_OPTIONS: { value: FeedTab; label: string }[] = [
   { value: "notes", label: "Notes" },
-  { value: "highlights", label: "Your highlights" },
+  { value: "highlights", label: "Highlights" },
 ];
 
 /** A stable DOM id per item — looked up via `document.getElementById` in an
@@ -96,7 +95,7 @@ function groupFeedItemsByCategory(items: FeedItem[]): FeedItemRun[] {
  * background tint was tried here — a background sized to just the text
  * (not the full-bleed bar) is worth another pass later, but isn't this
  * one. */
-function FeedItemLabel({ run, filter }: { run: FeedItemRun; filter: AnnotationFeedFilter }) {
+function FeedItemLabel({ run, filter }: { run: FeedItemRun; filter: FeedTab }) {
   const count = run.items.length;
   const noun = filter === "notes" ? (count === 1 ? "note" : "notes") : count === 1 ? "highlight" : "highlights";
   return (
@@ -109,7 +108,8 @@ function FeedItemLabel({ run, filter }: { run: FeedItemRun; filter: AnnotationFe
   );
 }
 
-/** The book-wide annotation feed — every mark of any kind, grouped under a
+/** The book's feed panel: the live room while you're in one (RoomPanel, its chat RoomChat), and
+ * the book-wide annotation feed — every mark of any kind, grouped under a
  * context label per run (which chapter, or General discussion — see
  * FeedItemLabel), each item's own full, real interactive thread (see
  * FeedHighlightThread) sitting under it — a bare
@@ -121,12 +121,12 @@ function FeedItemLabel({ run, filter }: { run: FeedItemRun; filter: AnnotationFe
  * order (General discussion first, then every highlight in spine order) —
  * no sort control here; the Top/Recent toggle this briefly had kept
  * fighting with UnderlineTabs' own alignment, so it's shelved for now (see
- * useBookAnnotationFeed, which still computes the "book" order this
+ * useFeed, which still computes the "book" order this
  * defaults to — a real sort control can come back once it has a spot that
  * doesn't fight the tabs). Opening the panel scrolls once to wherever the
  * reader currently is in the book; browsing the feed itself never
  * re-scrolls on its own. */
-export default function BookAnnotationFeedPanel({
+export default function FeedPanel({
   materialId,
   items,
   notes,
@@ -148,8 +148,8 @@ export default function BookAnnotationFeedPanel({
    * for each general note's replies (see its doc comment); nothing else
    * here needs it. */
   notes: Note[];
-  filter: AnnotationFeedFilter;
-  onFilterChange: (filter: AnnotationFeedFilter) => void;
+  filter: FeedTab;
+  onFilterChange: (filter: FeedTab) => void;
   /** The run the reader is in now — the panel opens scrolled to it. */
   activeSectionId?: string;
   onJump: (entry: FeedEntry) => void;
@@ -168,28 +168,24 @@ export default function BookAnnotationFeedPanel({
   onClearAuthor: () => void;
 }) {
   const createNote = useCreateNote(materialId);
-  // Room chat sits beside the two tabs while you're in the room on this
-  // book, with its unread count (spec §3.1); leaving the room leaves it.
+  // The Room tab comes third while you're in the room on this book, with chat's
+  // unread count (spec §3.1); leaving the room leaves it.
   const chatUnread = useRoomStore((s) => roomChatUnread(s, materialId));
   const inRoom = chatUnread !== null;
-  const onChat = filter === "chat" && inRoom;
+  const onRoom = filter === "room" && inRoom;
   useEffect(() => {
-    if (filter === "chat" && !inRoom) onFilterChange("notes");
+    if (filter === "room" && !inRoom) onFilterChange("notes");
   }, [filter, inRoom, onFilterChange]);
   const tabOptions = inRoom
     ? [
         ...FILTER_OPTIONS,
         {
-          value: "chat" as const,
+          value: "room" as const,
           label: (
-            <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-              Room chat
-              {chatUnread > 0 && (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] leading-none tabular-nums text-white">
-                  {chatUnread > 99 ? "99+" : chatUnread}
-                </span>
-              )}
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-brand-500" />
+              Room
+              <UnreadBadge count={chatUnread} />
             </span>
           ),
         },
@@ -202,7 +198,7 @@ export default function BookAnnotationFeedPanel({
       value={filter}
       onChange={(next) => {
         onClearAuthor();
-        onFilterChange(next as AnnotationFeedFilter);
+        onFilterChange(next as FeedTab);
       }}
     />
   );
@@ -288,7 +284,8 @@ export default function BookAnnotationFeedPanel({
       // background" band sitting above the footer composer.
       bodyClassName="om-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5"
       footer={
-        onChat ? (
+        onRoom ? (
+          // The room's controls live in the mini-player; here, the chat's composer.
           <RoomChatComposer materialId={materialId} />
         ) : (
           // Bottom-docked and independent of `filter` — a general, book-level
@@ -300,8 +297,7 @@ export default function BookAnnotationFeedPanel({
           <div className="flex flex-col gap-2">
             <NoteComposer
               initialText=""
-              placeholder="Add a note"
-              startCollapsed
+              placeholder="Share a note"
               showMemberPrompt
               action="note"
               draftKey={`book-${materialId}`}
@@ -319,18 +315,14 @@ export default function BookAnnotationFeedPanel({
           </div>
         )
       }
-      headerMenu={<LiveChip materialId={materialId} />}
-      // No "Notes & Highlights" title — the tabs already say what the panel
-      // holds, so they are the header, sharing its line with Close. In the
-      // room there are three tabs and the Live chip, too many for one line:
-      // "Notes" and the chip head the panel, the tabs get their own row
-      // (spec §3.1).
-      title={inRoom ? "Notes" : undefined}
-      tabs={inRoom ? undefined : tabs}
-      subheader={inRoom ? <div className="px-5 pt-2.5">{tabs}</div> : undefined}
+      // Joins a live room from here; once you're in, the Room tab says it.
+      headerMenu={inRoom ? undefined : <LiveChip materialId={materialId} />}
+      // No title — the tabs already say what the panel holds, so they are
+      // the header, sharing its line with Close.
+      tabs={tabs}
     >
-      {onChat ? (
-        <RoomChatList />
+      {onRoom ? (
+        <RoomStage />
       ) : (
         <>
           {focusedAuthor && (
@@ -356,11 +348,11 @@ export default function BookAnnotationFeedPanel({
           )}
           {items.length === 0 ? (
             <NoResults
-              className="mt-5"
+              className="mt-5 text-center"
               message={
                 filter === "notes"
-                  ? "No notes in this book yet — be the first to say something."
-                  : "You have no private highlights in this book"
+                  ? "No notes"
+                  : "No highlights"
               }
             />
           ) : (

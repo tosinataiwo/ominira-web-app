@@ -429,7 +429,7 @@ export default function MaterialDetailView({ material }: { material: MaterialDet
             text-left (see its own comment): a centered *block* reads fine,
             centered *prose* doesn't. */}
         <div className="mx-auto w-full max-w-[640px] min-w-0 text-center">
-          <h1 className="font-serif text-2xl font-semibold leading-tight text-[var(--reader-text)] shell:text-4xl">
+          <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
             {material.title}
           </h1>
           <div className="mt-2 text-sm font-medium text-[var(--reader-text-muted)]">{material.author}</div>

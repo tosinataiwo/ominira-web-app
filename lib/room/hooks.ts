@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { selectBand, selectMargin, selectReadingCount } from "@/lib/room/margin";
+import { selectBand, selectMargin } from "@/lib/room/margin";
 import { selectHands, selectListening, selectSpeaking } from "@/lib/room/presence";
 import type { RoomPresence } from "@/lib/room/events";
 import type { RoomSnapshot } from "@/lib/room/session";
@@ -22,9 +22,13 @@ export const useSpeaking = () => useRoom((s) => selectSpeaking(s.roster));
 export const useHands = () => useRoom((s) => selectHands(s.roster));
 export const useListening = () => useRoom((s) => selectListening(s.roster));
 
-/** Voices heard now, in Speaking now's order: the status line and the player's face. */
+/** Voices heard now, in Speaking now's order: the status line and the player's
+ * face. A speaker reading aloud counts throughout, quiet gaps between
+ * passages included. */
 export const useVoices = () =>
-  useRoom((s): RoomPresence[] => selectSpeaking(s.roster).filter((p) => s.speakingIds.includes(p.readerId)));
+  useRoom((s): RoomPresence[] =>
+    selectSpeaking(s.roster).filter((p) => p.readingAloud !== null || s.speakingIds.includes(p.readerId))
+  );
 
 /** One member's audio state, for their avatar. */
 export const useVoice = (readerId: string) =>
@@ -39,6 +43,7 @@ export const useRoomControls = () =>
   useRoom((s) => ({
     micOn: s.micOn,
     micState: s.micState,
+    readingAloud: s.readingAloud,
     handRaised: s.handRaised,
     connection: s.connection,
     reconnecting: s.connection === "reconnecting" && Object.values(s.peerHealth).some((h) => h !== "connected"),
@@ -60,12 +65,22 @@ export const useFollowing = () =>
     return member ? { member, paused: s.follow.paused, direction: s.follow.direction } : null;
   });
 
-/** A moderator's Bring everyone to my page, for the Jump prompt. */
-export const useSummon = () =>
-  useRoom((s) => {
-    const member = s.follow.summon && s.roster.find((p) => p.readerId === s.follow.summon!.from);
-    return member ? { member } : null;
-  });
+/** Tap-to-follow outside the room's own UI (spec §1.6): the rail's faces and
+ * the notes feed's avatars. `tap(readerId)` is the follow toggle while you're
+ * in the room on this book and they are too (never yourself), else null. */
+export function useFollowTap() {
+  const session = useRoomStore((s) => s.session);
+  const onBook = useReaderView() !== null;
+  const parts = useRoom((s) => ({ me: s.readerId, followingId: s.follow.targetId, roster: s.roster }));
+  const live = session && onBook && parts ? { session, ...parts } : null;
+  return {
+    followingId: live?.followingId ?? null,
+    tap: (readerId: string) =>
+      live && readerId !== live.me && live.roster.some((p) => p.readerId === readerId)
+        ? () => live.session.follow(readerId)
+        : null,
+  };
+}
 
 /** The quiet margin's readers and places. */
 export function useMargin() {
@@ -78,22 +93,18 @@ export function useMargin() {
   return useMemo(() => (parts ? selectMargin(parts.roster, parts.places, parts) : []), [parts]);
 }
 
-/** "N reading" (spec §1.3). */
-export const useReadingCount = () =>
-  useRoom((s) =>
-    selectReadingCount(
-      s.roster,
-      s.readerId,
-      selectMargin(s.roster, s.follow.places, { readerId: s.readerId, followingId: s.follow.targetId }).map(
-        (m) => m.member.readerId,
-      ),
-    ),
-  ) ?? 0;
-
 /** The speaker band: whose selection, and its ranges. */
 export function useBand() {
-  const parts = useRoom((s) => ({ roster: s.roster, highlights: s.highlights, readerId: s.readerId }));
-  return useMemo(() => (parts ? selectBand(parts.roster, parts.highlights, parts.readerId) : null), [parts]);
+  const parts = useRoom((s) => ({
+    roster: s.roster,
+    highlights: s.highlights,
+    readerId: s.readerId,
+    followingId: s.follow.targetId,
+  }));
+  return useMemo(
+    () => (parts ? selectBand(parts.roster, parts.highlights, parts.readerId, parts.followingId) : null),
+    [parts]
+  );
 }
 
 /** A member's exact place (`pos`), when they send one. */

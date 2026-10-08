@@ -4,11 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { materialKeys } from "@/lib/materials/queryKeys";
 import { useMaterialRoom } from "@/lib/room/useMaterialRoom";
+import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import { activeRoom, useRoomStore } from "@/stores/room-store";
 import { showToast } from "@/stores/toast-store";
 
 /** "Live · 25 in room" on a book with a live room (spec §3.1, §11): tap to
- * join, or to open the panel when you're already in. A full room reads
+ * join, or to open the Room tab when you're already in. A full room reads
  * "Full · 25 in room" and can't be joined. The one piece of the room in the
  * main bundle; joining loads the rest. */
 export default function LiveChip({ materialId, className = "" }: { materialId: string; className?: string }) {
@@ -19,7 +20,7 @@ export default function LiveChip({ materialId, className = "" }: { materialId: s
     return room?.room.materialId === materialId ? room.roster.length : null;
   });
   const join = useRoomStore((s) => s.join);
-  const setPanelOpen = useRoomStore((s) => s.setPanelOpen);
+  const openRoom = useOpenRoom();
   const queryClient = useQueryClient();
 
   const live = data?.live;
@@ -29,7 +30,7 @@ export default function LiveChip({ materialId, className = "" }: { materialId: s
   const full = !inRoom && members >= live.maxMembers;
 
   const onClick = async () => {
-    if (inRoom) return setPanelOpen(true);
+    if (inRoom) return openRoom(materialId);
     if (!signedIn) return showToast("Sign in to join the room.");
     try {
       await join(live.id);

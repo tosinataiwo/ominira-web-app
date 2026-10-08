@@ -65,9 +65,9 @@
      --color-highlight above, which is the reading-highlighter yellow. */
   --color-quote-wash: #f6e4ce;
 
-  --font-serif: var(--font-source-serif), "Iowan Old Style", Georgia, serif;
-  --font-sans: var(--font-manrope), -apple-system, "Segoe UI", sans-serif;
-  --font-literata: var(--font-literata-google), Georgia, serif;
+  /* font-serif / font-sans follow the two families in :root below. */
+  --font-serif: var(--serif);
+  --font-sans: var(--sans);
 
   --radius-xs: 6px;
   --radius-sm: 8px;
@@ -88,10 +88,26 @@
   --app-sidebar-w: 220px;
 }
 
+/* ---- Typography — two families (font-serif / font-sans) and four sizes.
+   type-N sets only size, line-height and weight; pair it with a family and
+   any other Tailwind classes in the component. Book/article body text in the
+   reader is set in stores/reader-store.ts (DEFAULT_TYPOGRAPHY), not here. ---- */
+:root {
+  --serif: var(--font-source-serif), "Iowan Old Style", Georgia, serif;
+  --sans: var(--font-manrope), -apple-system, "Segoe UI", sans-serif;
+}
+
+@utility type-1 { font-size: 26px; line-height: 1.2; font-weight: 600; @variant md { font-size: 34px; line-height: 1.15; } }
+@utility type-2 { font-size: 24px; line-height: 1.3; @variant md { font-size: 32px; line-height: 1.25; } }
+@utility type-3 { font-size: 20px; line-height: 1.25; font-weight: 700; @variant md { font-size: 22px; } }
+@utility type-4 { font-size: 16px; line-height: 1.75; }
+
 html,
 body {
   height: 100%;
   margin: 0;
+  font-family: var(--sans);
+  font-size: 16px;
   /* data-reader-theme is on <html> before first paint (lib/pwa/boot.ts);
      the fallback only covers a page with scripts disabled. */
   background: var(--reader-bg, var(--color-sand-50));
@@ -178,16 +194,17 @@ body {
   --reader-surface: #ffffff;
   --reader-surface-hover: #ececec;
   /* Matches the notes thread tree (--reader-thread-line). */
-  /* --reader-border: rgba(0, 0, 0, 0.08); */
-  --reader-border: var(--color-sand-300);
+  --reader-border: rgba(0, 0, 0, 0.08);
+  /* --reader-border: var(--color-sand-200); */
   /* The notes thread tree (trunk + elbows): one step darker than the
      preview card border (--color-app-border) so the tree reads as structure,
      kept opaque so the trunk and the elbow's overlapping vertical leg don't
      double up darker than the curve. */
-  --reader-thread-line: var(--color-sand-300);
-  --reader-text: #000000;
-  --reader-text-muted: #6e6e73;
-  --reader-text-subtle: #a1a1a6;
+  --reader-thread-line: var(--color-sand-100);
+  /* Warm ink, per the design system's --text-primary/-secondary/-muted. */
+  --reader-text: #14110e;
+  --reader-text-muted: #6b6660;
+  --reader-text-subtle: #8a8478;
   --reader-highlight: var(--color-highlight);
   --reader-highlight-border: var(--color-highlight-border);
   /* The jump-to-highlight flash's starting color (see .reader-jump-flash
@@ -234,9 +251,9 @@ body {
   /* --reader-border: rgba(255, 255, 255, 0.1); */
   --reader-border: #322c27;
   --reader-thread-line: var(--reader-border);
-  --reader-text: #ffffff;
-  --reader-text-muted: #98989d;
-  --reader-text-subtle: #636366;
+  --reader-text: #f3ede4;
+  --reader-text-muted: #b3a996;
+  --reader-text-subtle: #8a8478;
   /* Same marker-yellow as light theme's --color-highlight, just translucent
      over the black page instead of solid — a solid highlighter yellow here
      would wash out white text on top of it (light-on-light), so this stays
@@ -736,27 +753,35 @@ body {
   animation: loader-spin 800ms linear infinite;
 }
 
-/* Structural typography for a reflowing whole-document article — DOCX
-   (mammoth's convertToHtml output) and a web page's Readability-extracted
-   HTML (document-readers-spec.md § 3). Both hand this plain semantic HTML
-   (p/h1-h6/strong/em/ul/ol/li/blockquote/a), so one descendant-selector
-   block styles it, rather than each viewer re-deriving its own. The base
-   font-family/font-size/line-height are deliberately *not* set here — they
-   come from lib/reader/useArticleTypographyStyle.ts as an inline style on
-   the element this class is applied to, reading the exact same reader-store
-   values (and reader-configurable font-size/spacing/family preference)
-   BookContent.tsx derives for EPUB, so the two formats' reading feel is the
-   same source of truth, not a hardcoded approximation of it. Every rule
-   below is in `em`, so it already scales correctly off that inline
-   font-size. */
+/* Reader typography. The values live in stores/reader-store.ts
+   (DEFAULT_TYPOGRAPHY) and arrive as --reader-* variables on each reader's
+   root (typographyStyle). This only picks the phone vs. desktop font size. */
+.reader-typography {
+  --reader-font-size: var(--reader-font-size-mobile);
+}
+@media (min-width: 768px) {
+  .reader-typography {
+    --reader-font-size: var(--reader-font-size-desktop);
+  }
+}
+
+/* Typography for a reflowing whole-document article — DOCX (mammoth's
+   convertToHtml output) and a web page's Readability-extracted HTML
+   (document-readers-spec.md § 3). Both are plain semantic HTML, so one
+   descendant-selector block styles it. Same --reader-* typography variables
+   as EPUB (BookContent.tsx); heading sizes are in `em`, so they scale off
+   the font size. */
 .reader-article {
+  font-family: var(--reader-font-family);
+  font-size: var(--reader-font-size);
+  line-height: var(--reader-line-height);
   color: var(--reader-text);
 }
 .reader-article > :first-child {
   margin-top: 0;
 }
 .reader-article p {
-  margin: 0 0 1.1em;
+  margin: 0 0 var(--reader-paragraph-spacing);
 }
 .reader-article h1,
 .reader-article h2,

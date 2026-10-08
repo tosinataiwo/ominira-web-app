@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPluginRegistration } from "@embedpdf/core";
 import { EmbedPDF } from "@embedpdf/core/react";
 import { PdfErrorCode, type PdfDocumentObject, type PdfEngine } from "@embedpdf/models";
@@ -21,6 +21,7 @@ import { useDocumentKeyboard } from "@/lib/reader/useDocumentKeyboard";
 import DocumentEndPanel from "./DocumentEndPanel";
 import PdfPagerFooter from "./PdfPagerFooter";
 import ReaderHeader from "./ReaderHeader";
+import { useNarratedWord } from "./useNarratedWord";
 import { createPdfSurface, pdfBlockId, pdfPageIndexOf, pdfRangeRects, PDF_PAGE_ATTR, type PdfSurface } from "@/lib/annotations/pdfSurface";
 import { markStyle, NoteGlyph, useDocumentAnnotations } from "./DocumentAnnotations";
 import { useSessionStore } from "@/stores/session-store";
@@ -28,6 +29,13 @@ import type { FeedLocator } from "@/lib/reader/annotationFeed";
 import type { Annotation } from "@/stores/library-store";
 import { pdfView } from "@/lib/room/view";
 import { useRoomView } from "@/lib/room/useRoomView";
+import { useAudioStore } from "@/stores/audio-store";
+import { useNarrationStore } from "@/stores/narration-store";
+import { wordIndexAt } from "@/lib/audio/narrationText";
+import { pdfNarrationDocument, pdfPageHasText, pdfWordRects } from "@/lib/audio/pdfNarration";
+import { useDockedHeight } from "@/app/components/useBottomDock";
+
+type ListenProps = { canListen: boolean; isListen: boolean; onListen: () => void };
 
 const TOP_BAR_HEIGHT_PX = 60;
 const RAIL_INSET_PX = 16;
@@ -139,6 +147,11 @@ export default function PdfDocumentView({
   }, []);
 
   const { engine, error: engineError, discard: discardEngine } = usePdfEngine(generation);
+  // The header's Play button, reported up by PdfReaderBody once it knows
+  // whether the PDF has text to read.
+  const [listen, setListen] = useState<ListenProps | undefined>(undefined);
+  // Keeps the pager footer clear of the narration bar / room player.
+  const dockedHeight = useDockedHeight();
   const { buffer, error: fetchError, progress } = download;
 
   // Retry refetches the document and, if the engine was what failed, starts a
@@ -181,6 +194,7 @@ export default function PdfDocumentView({
         title={title}
         urlLocator={urlLocator}
         onRetry={retry}
+        onListenProps={setListen}
       />
     );
   } else {
@@ -195,8 +209,14 @@ export default function PdfDocumentView({
       className="w-full h-dvh box-border overflow-hidden relative font-sans"
       style={{ background: "var(--reader-bg)" }}
     >
-      <ReaderHeader materialId={materialId} topBarHeightPx={TOP_BAR_HEIGHT_PX} railInsetPx={RAIL_INSET_PX} onClose={onClose} title={title} />
-      <div className="absolute inset-x-0 bottom-0" style={{ top: TOP_BAR_HEIGHT_PX }}>
+      <ReaderHeader
+        topBarHeightPx={TOP_BAR_HEIGHT_PX}
+        railInsetPx={RAIL_INSET_PX}
+        onClose={onClose}
+        title={title}
+        {...listen}
+      />
+      <div className="absolute inset-x-0" style={{ top: TOP_BAR_HEIGHT_PX, bottom: dockedHeight }}>
         {body}
       </div>
     </div>
@@ -215,6 +235,7 @@ function PdfReader({
   title,
   urlLocator,
   onRetry,
+  onListenProps,
 }: {
   engine: PdfEngine;
   buffer: ArrayBuffer;
@@ -222,6 +243,7 @@ function PdfReader({
   title: string;
   urlLocator?: Locator;
   onRetry: (engineFailed: boolean) => void;
+  onListenProps: (props: ListenProps | undefined) => void;
 }) {
   const plugins = useMemo(
     () => [
@@ -282,6 +304,7 @@ function PdfReader({
               urlLocator={urlLocator}
               engine={engine}
               document={doc.document}
+              onListenProps={onListenProps}
             />
           </DocumentIdContext.Provider>
         );
@@ -308,6 +331,7 @@ function PdfPage({ pageIndex }: { pageIndex: number }) {
       <RenderLayer documentId={documentId} pageIndex={pageIndex} scale={BASE_LAYER_SCALE} className="pointer-events-none block" />
       <TilingLayer documentId={documentId} pageIndex={pageIndex} className="pointer-events-none" />
       <PdfHighlightLayer pageIndex={pageIndex} />
+      <PdfNarrationLayer pageIndex={pageIndex} />
     </div>
   );
 }
@@ -315,6 +339,7 @@ function PdfPage({ pageIndex }: { pageIndex: number }) {
 /** What each page's highlight layer reads — provided once by PdfReaderBody, so
  * the page renderer itself can stay a plain function the Scroller calls. */
 type PdfAnnotationsContextValue = {
+  materialId: string;
   surface: PdfSurface;
   document: PdfDocumentObject;
   getForPassage: (block: string) => Annotation[];
@@ -385,6 +410,35 @@ function PdfHighlightLayer({ pageIndex }: { pageIndex: number }) {
   );
 }
 
+/** The word being read aloud on this page — your narration's, or a room
+ * speaker's (useNarratedWord). */
+function PdfNarrationLayer({ pageIndex }: { pageIndex: number }) {
+  const ctx = useContext(PdfAnnotationsContext);
+  const word = useNarratedWord(ctx?.materialId);
+  const data = ctx?.surface.page(pageIndex);
+  if (!ctx || !data || word?.passageId !== pdfBlockId(pageIndex)) return null;
+  const { width, height } = ctx.document.pages[pageIndex].size;
+  const pct = (v: number, of: number) => `${(v / of) * 100}%`;
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {pdfWordRects(data, word.index).map((r, i) => (
+        <div
+          key={i}
+          className="absolute rounded-[2px]"
+          style={{
+            left: pct(r.x, width),
+            top: pct(r.y, height),
+            width: pct(r.w, width),
+            height: pct(r.h, height),
+            background: "var(--reader-active-word-bg)",
+            mixBlendMode: "multiply",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** Hands the Viewport's scrolling element up to the reader — the Viewport keeps
  * its own ref and doesn't forward one, but exposes it to its children. */
 function ViewportElementReporter({ onElement }: { onElement: (el: HTMLDivElement | null) => void }) {
@@ -402,12 +456,14 @@ function PdfReaderBody({
   urlLocator,
   engine,
   document,
+  onListenProps,
 }: {
   materialId: string;
   title: string;
   urlLocator?: Locator;
   engine: PdfEngine;
   document: PdfDocumentObject;
+  onListenProps: (props: ListenProps | undefined) => void;
 }) {
   const readerId = useSessionStore((s) => s.readerId);
   const documentId = useContext(DocumentIdContext);
@@ -491,6 +547,71 @@ function PdfReaderBody({
     return scroll.onScroll((metrics) => metrics.renderedPageIndexes.forEach((i) => surface.ensurePage(i)));
   }, [scroll, surface]);
 
+  // Listening. Narration reads the text PDFium has loaded so far
+  // (pdfNarrationDocument), so this keeps a few pages ahead of the page being
+  // read loaded, and the playing copy current as more arrive. A PDF with no
+  // text on any page loaded (a scan) gets no Play button.
+  const isListen = useAudioStore((s) => s.book?.id === materialId);
+  const narratingPage = useNarrationStore((s) => (isListen ? pdfPageIndexOf(s.currentPlayingPassageId ?? "") : -1));
+  const narrationDocument = useCallback(
+    () => (surface ? pdfNarrationDocument({ materialId, title, pageCount: numPages, page: (i) => surface.page(i) }) : null),
+    [surface, materialId, title, numPages]
+  );
+  useEffect(() => {
+    if (!surface) return;
+    // The scanned check looks at the opening pages, whichever page is on screen.
+    for (let i = 0; i < Math.min(5, numPages); i++) surface.ensurePage(i);
+  }, [surface, numPages]);
+  useEffect(() => {
+    if (!surface || narratingPage < 0) return;
+    for (let i = narratingPage + 1; i <= Math.min(narratingPage + 5, numPages - 1); i++) surface.ensurePage(i);
+  }, [surface, narratingPage, numPages]);
+  useEffect(() => {
+    const doc = isListen ? narrationDocument() : null;
+    if (doc) useAudioStore.getState().updateBookContent(doc);
+  }, [isListen, narrationDocument, geometryVersion]);
+  const canListen = useMemo(
+    () => Array.from({ length: numPages }, (_, i) => surface?.page(i)).some(pdfPageHasText),
+    // geometryVersion: re-checked as each page's text loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [surface, numPages, geometryVersion]
+  );
+  const onListen = useCallback(() => {
+    const doc = narrationDocument();
+    if (doc) useAudioStore.getState().openBook(doc, materialId);
+  }, [narrationDocument, materialId]);
+  // "Listen from here": from the selection's first word, on its page.
+  const listenFrom = useCallback(
+    (block: string, offset: number) => {
+      const pageIndex = pdfPageIndexOf(block);
+      const text = surface?.page(pageIndex)?.text;
+      if (text === undefined) return;
+      const wordIndex = wordIndexAt(text, offset);
+      if (isListen) useNarrationStore.getState().seekToPassageForListening(`page-${pageIndex}`, block, wordIndex);
+      else {
+        const doc = narrationDocument();
+        if (doc) useAudioStore.getState().openBookAtPassage(doc, materialId, `page-${pageIndex}`, block, wordIndex);
+      }
+    },
+    [surface, isListen, narrationDocument, materialId]
+  );
+  useEffect(() => {
+    onListenProps({ canListen, isListen, onListen });
+    return () => onListenProps(undefined);
+  }, [onListenProps, canListen, isListen, onListen]);
+  // Turns the page with narration: to where it starts (past a cover with no
+  // text, say), then onward only for a reader who was on the page just
+  // finished; one who has scrolled elsewhere is left there.
+  const prevNarratingPageRef = useRef(narratingPage);
+  useEffect(() => {
+    const prev = prevNarratingPageRef.current;
+    prevNarratingPageRef.current = narratingPage;
+    if (narratingPage < 0 || prev === narratingPage || narratingPage === pageNumber - 1) return;
+    if (prev < 0 || prev === pageNumber - 1) scrollToPage(narratingPage + 1, "smooth");
+    // pageNumber is read at the moment the narrated page changes, not tracked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narratingPage, scrollToPage]);
+
   const getPassageText = useCallback(
     (block: string) => surface?.page(pdfPageIndexOf(block))?.text ?? "",
     [surface]
@@ -514,6 +635,7 @@ function PdfReaderBody({
     locate,
     jumpToBlock,
     activeBlock: pdfBlockId(pageNumber - 1),
+    onListenFrom: canListen ? listenFrom : undefined,
   });
   const { getForPassage } = annotations;
 
@@ -537,6 +659,7 @@ function PdfReaderBody({
   const annotationsContext = useMemo<PdfAnnotationsContextValue | null>(
     () =>
       surface && {
+        materialId,
         surface,
         document,
         getForPassage,
@@ -544,7 +667,7 @@ function PdfReaderBody({
         readerId,
         version: geometryVersion,
       },
-    [surface, document, getForPassage, onMarkClick, readerId, geometryVersion]
+    [materialId, surface, document, getForPassage, onMarkClick, readerId, geometryVersion]
   );
 
   const zoomInfo = {

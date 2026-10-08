@@ -7,10 +7,11 @@ import { ROOM_REACTIONS } from "@/lib/room/events";
 import { useRoom } from "@/lib/room/hooks";
 import { useRoomStore } from "@/stores/room-store";
 
-// Reactions in the mini-player (spec §1.5, §4 sheet 02): React opens the
-// tray of seven above it, 44px targets, and stays open for more taps until
-// you tap away or press Escape. What's sent rises over the player with the
-// reactor's name (reactions.ts); the chat gets the digest.
+// Reactions in the mini-player (spec §1.5, §4 sheet 02):
+// React opens the tray of seven over its row (RoomActions), 44px targets
+// that narrow to fit, and it stays open for more taps until you tap away or
+// press Escape. What's sent rises over the player with the reactor's name
+// (reactions.ts); the chat gets the digest.
 
 export function ReactButton({ className, disabled }: { className: string; disabled: boolean }) {
   const session = useRoomStore((s) => s.session);
@@ -34,7 +35,7 @@ export function ReactButton({ className, disabled }: { className: string; disabl
   }, [open]);
 
   return (
-    <div ref={ref} className="relative flex">
+    <div ref={ref} className="flex">
       <button
         type="button"
         disabled={disabled}
@@ -49,13 +50,12 @@ export function ReactButton({ className, disabled }: { className: string; disabl
         } bg-[var(--reader-surface)]`}
       >
         <SmilePlus size={18} strokeWidth={1.75} />
-        <span className="hidden shell:inline">React</span>
       </button>
       {open && (
         <div
           role="toolbar"
           aria-label="Reactions"
-          className="reader-menu-in absolute right-0 bottom-full z-10 mb-2 flex rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] p-1 shadow-md"
+          className={`reader-menu-in absolute inset-x-0 bottom-full mx-auto w-fit max-w-full z-10 mb-2 flex rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] p-1 shadow-md`}
         >
           {ROOM_REACTIONS.map(({ emoji, label }) => (
             <button
@@ -64,7 +64,7 @@ export function ReactButton({ className, disabled }: { className: string; disabl
               aria-label={label}
               title={label}
               onClick={() => session?.react(emoji)}
-              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[22px] transition-transform hover:bg-[var(--reader-surface-hover)] active:scale-90"
+              className={`flex h-11 w-11 min-w-0 shrink cursor-pointer items-center justify-center rounded-full text-[22px] transition-transform hover:bg-[var(--reader-surface-hover)] active:scale-90`}
             >
               {emoji}
             </button>
@@ -80,7 +80,6 @@ export function ReactButton({ className, disabled }: { className: string; disabl
 export function RisingReactions() {
   const rising = useRoom((s) => s.rising);
   const people = useRoom((s) => s.chat.people);
-  const me = useRoom((s) => s.readerId);
   if (!rising?.length) return null;
   return (
     <div aria-hidden="true" className="pointer-events-none absolute right-4 bottom-full mb-2 flex flex-col items-end gap-1">
@@ -91,7 +90,7 @@ export function RisingReactions() {
           className="room-rise flex items-center gap-1.5 rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] py-0.5 pr-2.5 pl-1.5 text-xs font-semibold whitespace-nowrap text-[var(--reader-text)] shadow-sm"
         >
           <span className="text-lg leading-none">{r.emoji}</span>
-          {r.readerId === me ? "You" : comradeName(people?.[r.readerId]?.name ?? "comrade")}
+          {comradeName(people?.[r.readerId]?.name ?? "comrade")}
         </span>
       ))}
     </div>

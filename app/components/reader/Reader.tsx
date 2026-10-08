@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
 import NotesSidebar from "./NotesSidebar";
-import BookAnnotationFeedPanel from "./notes/BookAnnotationFeedPanel";
+import FeedPanel from "./notes/FeedPanel";
 import { epubFeedLocator, type FeedEntry } from "@/lib/reader/annotationFeed";
 import SearchModal from "../SearchModal";
 import FootnotePopover from "./FootnotePopover";
@@ -20,20 +20,14 @@ import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
 import BackToCurrentButton from "./BackToCurrentButton";
 import Loader from "../Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
-import {
-  FONT_FAMILY_VARS,
-  FONT_SIZE_PX_RANGE,
-  contentWidthPxFromScale,
-  fontSizePxFromScale,
-  lineHeightFromScale,
-  useReaderStore,
-} from "@/stores/reader-store";
+import { useReaderStore, useTypographyStyle } from "@/stores/reader-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useAudioStore } from "@/stores/audio-store";
-import { useDockedHeight } from "@/app/components/useBottomDock";
+import { activeRoom, useRoomStore } from "@/stores/room-store";
+import { useDockedHeight, useNarrationBarHeight } from "@/app/components/useBottomDock";
 import { useNarrationStore } from "@/stores/narration-store";
-import { activeWordIndex } from "@/lib/audio/karaoke";
+import { useNarratedWord } from "./useNarratedWord";
 import { buildSectionsById, resolveSpineTarget } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
@@ -42,7 +36,7 @@ import { useReadingProgress } from "@/lib/reader/useReadingProgress";
 import { useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { createDomSurface } from "@/lib/annotations/surface";
 import { useTextSelection } from "@/lib/annotations/useTextSelection";
-import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
+import { useFeed } from "@/lib/reader/useFeed";
 import { useServerPositionReady } from "@/lib/reader/useServerPositionReady";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
@@ -151,10 +145,7 @@ export default function Reader({
   } = useTextAnnotations(materialId);
 
   const theme = useReaderStore((s) => s.theme);
-  const fontSizeScale = useReaderStore((s) => s.fontSizeScale);
-  const fontFamily = useReaderStore((s) => s.fontFamily);
-  const lineSpacingScale = useReaderStore((s) => s.lineSpacingScale);
-  const contentWidthScale = useReaderStore((s) => s.contentWidthScale);
+  const typographyStyle = useTypographyStyle();
 
   // "Now playing" is a single global slot (audio-store), not a per-book
   // flag — this book is in listen mode exactly when it's the one loaded
@@ -168,6 +159,7 @@ export default function Reader({
   const pauseAudio = useAudioStore((s) => s.pause);
   const updateBookContent = useAudioStore((s) => s.updateBookContent);
   const dockedHeight = useDockedHeight();
+  const narrationBarHeight = useNarrationBarHeight();
   const anyPlayerActive = audioStoreBook !== null;
   // Listening no longer requires a prerecorded narratorTrack — NarrationEngine
   // falls back to live, on-demand AI narration for any section without one —
@@ -227,7 +219,6 @@ export default function Reader({
   const narrationAudioIndex = useNarrationStore((s) => s.audioIndex);
   const narrationAudioSection = useNarrationStore((s) => s.audioSection);
   const currentPlayingPassageId = useNarrationStore((s) => s.currentPlayingPassageId);
-  const currentNarrationWords = useNarrationStore((s) => s.currentWords);
   const seekToPassageForListening = useNarrationStore((s) => s.seekToPassageForListening);
   const narrationExplicitJumpSeq = useNarrationStore((s) => s.explicitJumpSeq);
   const jumpNarrationToSection = useNarrationStore((s) => s.jumpToSection);
@@ -236,7 +227,11 @@ export default function Reader({
   // effect below, keyed on currentTimeMs, which changes far too often to
   // also drive a BookContent prop without defeating its memo()).
   const audioIsPlaying = useAudioStore((s) => s.isPlaying);
-  const audioCurrentTimeMs = useAudioStore((s) => s.currentTimeMs);
+  // The word read aloud now — yours, or a room speaker's (useNarratedWord).
+  const narratedWord = useNarratedWord(materialId);
+  // Word spans are rendered while a speaker could read aloud to you, not only
+  // while you listen, so a room's highlight has something to land on.
+  const roomOnThisBook = useRoomStore((s) => activeRoom(s)?.room.materialId === materialId);
 
   // Paragraph controls deliberately own narration seeking. Word spans remain
   // present only for karaoke timing, never as click targets.
@@ -271,7 +266,7 @@ export default function Reader({
   // identical output — pulling in the real localStorage values here, once,
   // right after mount, is what actually restores them. `hydrated` gates the
   // loading overlay below — without it, the reader would paint once with
-  // default theme/font/position and then visibly snap to the real
+  // default theme/position and then visibly snap to the real
   // persisted values a moment later.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
@@ -287,11 +282,6 @@ export default function Reader({
   // book yet (a second device, a fresh profile, cleared site data) would
   // otherwise commit to "nothing to resume" before the request ever arrived.
   const serverPositionReady = useServerPositionReady();
-
-  const fontSize = fontSizePxFromScale(fontSizeScale);
-  const lineHeight = lineHeightFromScale(lineSpacingScale);
-  const contentWidth = contentWidthPxFromScale(contentWidthScale);
-  const fontFamilyVar = FONT_FAMILY_VARS[fontFamily];
 
   const sectionsById = useMemo(() => buildSectionsById(sections), [sections]);
 
@@ -318,7 +308,7 @@ export default function Reader({
   }, [orderedSections]);
 
   const locateFeedEntry = useMemo(() => epubFeedLocator(orderedSections), [orderedSections]);
-  const noteFeed = useBookAnnotationFeed({ materialId, locate: locateFeedEntry });
+  const noteFeed = useFeed({ materialId, locate: locateFeedEntry });
   const shareToRoom = useShareToRoom(materialId);
 
   // Published so NowPlayingBar (rendered in the root layout, well outside
@@ -326,6 +316,13 @@ export default function Reader({
   // layout-store's own doc comment on readerPanelOpen. Same condition that
   // drives the notes-panel wrapper's shell:w-95/shell:w-0 toggle below, so
   // the two can't drift out of sync with each other.
+  // The feed and a thread's notes panel share one slot, and the room's
+  // mini-player can open the feed from outside, so the feed opening closes
+  // the thread.
+  useEffect(() => {
+    if (noteFeed.open) closeNotesPanel();
+  }, [noteFeed.open, closeNotesPanel]);
+
   const setReaderPanelOpen = useLayoutStore((s) => s.setReaderPanelOpen);
   useEffect(() => {
     setReaderPanelOpen(!!notesPanel || noteFeed.open);
@@ -437,7 +434,7 @@ export default function Reader({
     surface: selectionSurface,
     active: Boolean(selection),
     onSelect: onTextSelect,
-    layoutKey: `${fontSizeScale}|${fontFamily}|${lineSpacingScale}|${contentWidthScale}`,
+    beneath: true,
   });
 
   // Every "jump to this section id" caller (chapters drawer, in-book link
@@ -628,22 +625,9 @@ export default function Reader({
   // change" and leave the *old* passage's word 0 marked, which read as the
   // highlight reverting to the previous paragraph for a moment.
   //
-  // currentNarrationWords[0].passageId !== currentPlayingPassageId guards a
-  // separate race, on top of that: when a passage switch happens,
-  // audio-store's currentTimeMs resets to 0 synchronously (NarrationEngine's
-  // stopCurrentAudio), but narration-store's currentPlayingPassageId/
-  // currentWords only catch up a render later (a separate effect, reacting
-  // to the new `target`) — and currentWords specifically stays on the
-  // *previous* passage until its own words finish loading from the network,
-  // which can take noticeably longer than a render tick. Every KaraokeWord
-  // already carries its own passageId (liveNarrationCache stamps it on), so
-  // this detects the mismatch and actively clears the marker rather than
-  // leaving it lit on the old passage: playback has already moved on (the
-  // real <audio> element's currentTime reset to 0 the instant the switch
-  // happened), so a highlight left sitting on the previous paragraph is a
-  // stale answer, not a safe one — it reads as "the narration highlight
-  // didn't keep up." No highlight for the brief gap until the new passage's
-  // words arrive is the honest state; it reappears the instant they do.
+  // Between clips there is no word at all (narration-store's currentWord is
+  // null until the next clip plays), so the marker clears rather than
+  // lingering on, or jumping back within, the previous passage.
   //
   // Even when the key matches, this still re-applies the class if the
   // element it's supposedly already on isn't actually connected/marked
@@ -656,21 +640,20 @@ export default function Reader({
   // vanishing (or freezing on nothing) right after using that button.
   const narratingWordElRef = useRef<Element | null>(null);
   const narratingWordKeyRef = useRef<string>("");
+  //
+  // The word comes from useNarratedWord: your own narration's, or the one a
+  // speaker in this book's live room is reading aloud (which is why the
+  // section is looked up from the passage rather than taken from narration).
+  const narratedSectionId = narratedWord ? passageLookup.sectionOf.get(narratedWord.passageId) : undefined;
   useEffect(() => {
-    if (!isListen || !currentPlayingPassageId || !narrationAudioSection) {
+    if (!narratedWord || !narratedSectionId) {
       narratingWordElRef.current?.classList.remove("om-narrating-word");
       narratingWordElRef.current = null;
       narratingWordKeyRef.current = "";
       return;
     }
-    if (currentNarrationWords.length === 0 || currentNarrationWords[0].passageId !== currentPlayingPassageId) {
-      narratingWordElRef.current?.classList.remove("om-narrating-word");
-      narratingWordElRef.current = null;
-      narratingWordKeyRef.current = "";
-      return;
-    }
-    const idx = activeWordIndex(currentNarrationWords, audioCurrentTimeMs);
-    const key = `${currentPlayingPassageId}:${idx}`;
+    const idx = narratedWord.index;
+    const key = `${narratedWord.passageId}:${idx}`;
     const alreadyCorrect =
       key === narratingWordKeyRef.current &&
       narratingWordElRef.current?.isConnected &&
@@ -678,13 +661,11 @@ export default function Reader({
     if (alreadyCorrect) return;
     narratingWordKeyRef.current = key;
     narratingWordElRef.current?.classList.remove("om-narrating-word");
-    const passageEl = getSlideEl(narrationAudioSection.id)?.querySelector(
-      `[data-passage-id="${currentPlayingPassageId}"]`
-    );
+    const passageEl = getSlideEl(narratedSectionId)?.querySelector(`[data-passage-id="${narratedWord.passageId}"]`);
     const el = passageEl?.querySelector(`[data-word-index="${idx}"]`) ?? null;
     el?.classList.add("om-narrating-word");
     narratingWordElRef.current = el;
-  }, [isListen, currentPlayingPassageId, narrationAudioSection, currentNarrationWords, audioCurrentTimeMs, getSlideEl]);
+  }, [narratedWord, narratedSectionId, getSlideEl]);
 
   // Whether the actual passage element currently narrating is scrolled into
   // view — distinct from isFollowingNarration, which only tracks the
@@ -845,7 +826,7 @@ export default function Reader({
   // right passage (isReady, same gate the loader itself waits on), open
   // that annotation's thread the same way clicking its marker would. A
   // ref guard keeps this to once per page load, same idiom as
-  // BookAnnotationFeedPanel's own once-on-open positioning effect.
+  // FeedPanel's own once-on-open positioning effect.
   //
   // useResumeScroll only lands on the *passage's* top (block: "start") —
   // it has no notion of which highlight within that passage the reader
@@ -970,15 +951,6 @@ export default function Reader({
   // home-indicator safe area on notched phones, so it can render a bit
   // taller there than this used to assume.
   const contentBottomPad = isMobile ? 104 : 96;
-  // The reader's own font-size scale (fontSize above) is one shared px
-  // value across every breakpoint — a book read at the same nominal size on
-  // a phone still feels noticeably larger than on desktop, both because
-  // there's less surrounding whitespace to offset it against and because
-  // it's typically held closer. A small flat trim on mobile only (not a
-  // rescale of the whole slider) brings passage text back in line with how
-  // it reads on desktop, without changing what "40" on the size control
-  // means for anyone on a larger screen.
-  const passageFontSize = isMobile ? Math.max(FONT_SIZE_PX_RANGE.min, fontSize - 1.5) : fontSize;
 
   // This reader as a live room sees it (lib/room/view.ts): following,
   // the margin and the speaker band, once the reader has landed. Rebuilt
@@ -1020,11 +992,15 @@ export default function Reader({
       // ChapterNavFooter (absolute, pinned to *its* bottom edge) rendered
       // partly or fully below the fold behind Safari's own chrome. 100dvh
       // tracks the actual visible viewport live as the toolbar shows/hides.
-      className="w-full h-dvh box-border flex flex-col overflow-hidden relative font-sans"
+      // overflow-clip, not -hidden, here and on the wrappers below: a hidden
+      // box can still be scrolled from code, so the reader's scrollIntoView
+      // (re-centring a passage, e.g. as the room panel opens) used to shift
+      // the whole frame up — header and panel with it. Clip can't scroll.
+      className="reader-typography w-full h-dvh box-border flex flex-col overflow-clip relative font-sans"
+      style={typographyStyle}
     >
-      <div className="flex-1 min-h-0 relative overflow-hidden">
+      <div className="flex-1 min-h-0 relative overflow-clip">
         <ReaderHeader
-          materialId={materialId}
           visible={chromeVisible}
           topBarHeightPx={topBarHeightPx}
           railInsetPx={railInsetPx}
@@ -1043,7 +1019,7 @@ export default function Reader({
             opening either narrows the reading column instead of blocking
             it. See the notes panel's own comment below for its mobile
             fallback (a bottom sheet, since there's no room to push there). */}
-        <div className="w-full h-full flex overflow-hidden">
+        <div className="w-full h-full flex overflow-clip">
           <ChaptersDrawer
             book={liveBook}
             scrollPct={scrollPct}
@@ -1091,7 +1067,6 @@ export default function Reader({
               onPointerUp={onPointerUp}
               onAnyClick={() => setChromeHidden((hidden) => !hidden)}
               contentPad={contentPad}
-              contentWidth={contentWidth}
               contentTopPad={contentTopPad}
               contentBottomPad={contentBottomPad}
               orderedSections={orderedSections}
@@ -1099,9 +1074,6 @@ export default function Reader({
               notesIndexSectionId={notesIndexSectionId}
               notesIndexGroups={notesIndexGroups}
               getAnnotations={getAnnotations}
-              fontSize={passageFontSize}
-              lineHeight={lineHeight}
-              fontFamilyVar={fontFamilyVar}
               notesById={notesById}
               onNoteClick={onNoteClick}
               onInternalLinkClick={onInternalLinkClick}
@@ -1109,7 +1081,7 @@ export default function Reader({
               justJumpedAnnotationId={justJumpedAnnotationId}
               onPassagePlayback={canListen ? handlePassagePlayback : undefined}
               currentPlayingPassageId={isListen ? currentPlayingPassageId : undefined}
-              trackNarrationWords={isListen}
+              trackNarrationWords={isListen || roomOnThisBook}
               isNarrationPlaying={isListen && audioIsPlaying}
             />
 
@@ -1129,7 +1101,8 @@ export default function Reader({
               // just doubles up the same affordance right above the "now
               // playing" bar.
               visible={footerVisible && !selection && !anyPlayerActive}
-              bottomOffsetPx={dockedHeight}
+              // Under the room's mini-player, which floats above it.
+              bottomOffsetPx={narrationBarHeight}
             />
 
             {/* Selection menu is a fixed-position overlay, so it doesn't need
@@ -1183,7 +1156,7 @@ export default function Reader({
                                 label: locateFeedEntry(selection.ranges[0].passageId)?.label ?? "",
                               });
                               if (notesPanel) closeNotesPanel();
-                              noteFeed.openChat();
+                              noteFeed.openRoom();
                               dismissSelection();
                             },
                           },
@@ -1276,12 +1249,12 @@ export default function Reader({
               nothing to show) so the width can actually transition instead
               of popping open/closed. */}
           <div
-            className={`fixed inset-0 z-[70] overflow-hidden pointer-events-none shell:static shell:inset-auto shell:h-full shell:flex-none shell:transition-[width] shell:duration-300 shell:ease-out ${
+            className={`fixed inset-0 z-[70] overflow-clip pointer-events-none shell:static shell:inset-auto shell:h-full shell:flex-none shell:transition-[width] shell:duration-300 shell:ease-out ${
               notesPanel || noteFeed.open ? "shell:w-95" : "shell:w-0"
             }`}
           >
             {noteFeed.open && (
-              <BookAnnotationFeedPanel
+              <FeedPanel
                 materialId={materialId}
                 items={noteFeed.items}
                 notes={noteFeed.notes}

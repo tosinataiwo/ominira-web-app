@@ -29,7 +29,7 @@ export function setThemeColor(color: string) {
 }
 
 // Plain ES5, no imports at runtime — it's serialized into the HTML. Theme
-// resolution mirrors reader-store (its v2/v5 migrations and merge): a saved
+// resolution mirrors reader-store (its migrate and merge): a saved
 // dark (incl. never-migrated v1 names like "carbon") is always a choice; a
 // saved light only counts once flagged themeExplicit (older blobs may hold
 // the old default); otherwise the device's scheme, light if it has none.

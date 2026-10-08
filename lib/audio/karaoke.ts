@@ -1,5 +1,9 @@
 export type KaraokeWord = {
   passageId: string;
+  /** Passage-wide word index (the `data-word-index` it lights), not the
+   * position in its chunk's clip: a long passage's later chunks start past
+   * the words of the chunks before them. */
+  index: number;
   text: string;
   startMs: number;
   endMs: number;

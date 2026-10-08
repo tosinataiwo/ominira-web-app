@@ -80,3 +80,20 @@ export function passageChunkTexts(passage: Passage): string[] {
   if (text.trim().length === 0) return [];
   return splitForSynthesis(text);
 }
+
+/** Words, as narration counts them: \S+ runs — the count KaraokeWord.index,
+ * every format's word highlight, and "listen from here" all share. */
+export const countWords = (text: string) => text.match(/\S+/g)?.length ?? 0;
+
+/** The index of the word at (or, from whitespace, just after) `offset`. */
+export const wordIndexAt = (text: string, offset: number) => countWords(text.slice(0, offset).replace(/\S+$/, ""));
+
+/** Each chunk's first word, as a passage-wide word index. */
+export function chunkWordOffsets(passage: Passage): number[] {
+  let n = 0;
+  return passageChunkTexts(passage).map((t) => {
+    const start = n;
+    n += countWords(t);
+    return start;
+  });
+}

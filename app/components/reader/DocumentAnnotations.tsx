@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Highlighter, MessageCircle, MessageSquareQuote, Trash2 } from "lucide-react";
+import { Copy, Headphones, Highlighter, MessageCircle, MessageSquareQuote, Trash2 } from "lucide-react";
+import { useDockedHeight } from "@/app/components/useBottomDock";
 import type { SelectionSurface } from "@/lib/annotations/surface";
 import { useTextSelection } from "@/lib/annotations/useTextSelection";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
-import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
+import { useFeed } from "@/lib/reader/useFeed";
 import { useShareToRoom } from "@/lib/room/sharePassage";
 import { useScrollChrome } from "@/lib/reader/useScrollChrome";
 import { PENDING_ANNOTATION_ID, useTextAnnotations } from "@/lib/reader/useTextAnnotations";
@@ -15,7 +16,7 @@ import { useReaderStore } from "@/stores/reader-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { Annotation } from "@/stores/library-store";
 import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
-import BookAnnotationFeedPanel from "./notes/BookAnnotationFeedPanel";
+import FeedPanel from "./notes/FeedPanel";
 import NotesFeedFab from "./NotesFeedFab";
 import NotesSidebar from "./NotesSidebar";
 import SelectionMenu, { type Item } from "./SelectionMenu";
@@ -59,6 +60,8 @@ export function useDocumentAnnotations({
   locate,
   jumpToBlock,
   activeBlock,
+  selectionBeneath,
+  onListenFrom,
 }: {
   materialId: string;
   surface: SelectionSurface | null;
@@ -74,7 +77,15 @@ export function useDocumentAnnotations({
   jumpToBlock: (block: string) => void;
   /** The block the reader is on, so the feed opens scrolled to its run. */
   activeBlock?: string;
+  /** Draw the selection behind the text — DOM text in an `isolate` scroller
+   * (see useTextSelection's `beneath`). */
+  selectionBeneath?: boolean;
+  /** Adds "Listen from here" to the selection menu: narration from the
+   * selection's first word, `block` and `offset` as the surface gives them. */
+  onListenFrom?: (block: string, offset: number) => void;
 }) {
+  // The menu's mobile bar sits above the narration bar / room player.
+  const dockedHeight = useDockedHeight();
   const theme = useReaderStore((s) => s.theme);
   const isMobile = useNarrowViewport();
   const annotations = useTextAnnotations(materialId);
@@ -93,10 +104,15 @@ export function useDocumentAnnotations({
     onNoteMarkerClick,
   } = annotations;
 
-  const feed = useBookAnnotationFeed({ materialId, locate });
+  const feed = useFeed({ materialId, locate });
   const shareToRoom = useShareToRoom(materialId);
   const scrollChrome = useScrollChrome(scrollEl);
   const { close: closeFeed } = feed;
+  // One slot for both panels, and the room's mini-player can open the feed
+  // from outside, so the feed opening closes the thread.
+  useEffect(() => {
+    if (feed.open) closeNotesPanel();
+  }, [feed.open, closeNotesPanel]);
   const onMarkClick = useCallback(
     (block: string, annotationId: string) => {
       closeFeed();
@@ -113,6 +129,7 @@ export function useDocumentAnnotations({
     active: Boolean(selection),
     onSelect: onTextSelect,
     layoutKey,
+    beneath: selectionBeneath,
   });
 
   const [copied, setCopied] = useState(false);
@@ -136,13 +153,27 @@ export function useDocumentAnnotations({
         <SelectionMenu
           anchor={selection.anchor}
           isMobile={isMobile}
-          bottomOffsetPx={0}
+          bottomOffsetPx={dockedHeight}
           theme={theme}
           items={
             [
               { key: "highlight", icon: <Highlighter size={iconSize} />, label: "Highlight", onClick: highlightSelection },
               { key: "note", icon: <MessageCircle size={iconSize} />, label: "Note", onClick: noteFromSelection },
               { key: "copy", icon: <Copy size={iconSize} />, label: copied ? "Copied ✓" : "Copy", onClick: copySelection },
+              ...(onListenFrom
+                ? [
+                    {
+                      key: "listen",
+                      icon: <Headphones size={iconSize} />,
+                      label: "Listen from here",
+                      onClick: () => {
+                        const { passageId, start } = selection.ranges[0];
+                        onListenFrom(passageId, start);
+                        dismissSelection();
+                      },
+                    },
+                  ]
+                : []),
               ...(shareToRoom
                 ? [
                     {
@@ -156,7 +187,7 @@ export function useDocumentAnnotations({
                           label: locate(selection.ranges[0].passageId)?.label ?? "",
                         });
                         closeNotesPanel();
-                        feed.openChat();
+                        feed.openRoom();
                         dismissSelection();
                       },
                     },
@@ -174,7 +205,7 @@ export function useDocumentAnnotations({
         <SelectionMenu
           anchor={overlay.anchor}
           isMobile={isMobile}
-          bottomOffsetPx={0}
+          bottomOffsetPx={dockedHeight}
           theme={theme}
           items={[]}
           override={
@@ -211,7 +242,7 @@ export function useDocumentAnnotations({
                 onShare={() => {}}
               />
             ) : (
-              <BookAnnotationFeedPanel
+              <FeedPanel
                 materialId={materialId}
                 items={feed.items}
                 notes={feed.notes}

@@ -99,10 +99,10 @@ export default function SurveyWizard({ materials, categories }: Props) {
       <div className="mx-auto w-full max-w-sm shell:max-w-2xl">
         {step === 0 ? (
           <div>
-            <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
+            <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
               Have you read any of these books?
             </h1>
-            <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
+            <p className="mt-3 font-serif text-[14px] text-[var(--reader-text-muted)]">
               You can choose as many as you&rsquo;ve read or none if you haven&rsquo;t read any.
             </p>
 
@@ -131,10 +131,10 @@ export default function SurveyWizard({ materials, categories }: Props) {
           </div>
         ) : step === 1 ? (
           <div>
-            <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
+            <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
               What are you interested in?
             </h1>
-            <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
+            <p className="mt-3 font-serif text-[14px] text-[var(--reader-text-muted)]">
               Select the categories you&rsquo;re most interested in.
             </p>
 
@@ -155,10 +155,10 @@ export default function SurveyWizard({ materials, categories }: Props) {
           </div>
         ) : (
           <div>
-            <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
+            <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
               Tell us your age and gender?
             </h1>
-            <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
+            <p className="mt-3 font-serif text-[14px] text-[var(--reader-text-muted)]">
               Optional and anonymous. Skip anything you&rsquo;d rather not say.
             </p>
 

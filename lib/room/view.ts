@@ -30,7 +30,7 @@ export type ReaderView = {
   /** 0–1 through the material, or null for a place this view can't address. */
   fraction(place: ViewPlace): number | null;
   placeAt(fraction: number): ViewPlace | undefined;
-  /** "On p. 4": the section for EPUB, the page for PDF, a percentage otherwise. */
+  /** "p. 4": the section for EPUB, the page for PDF, a percentage otherwise. */
   label(place: ViewPlace): string;
   /** Where text shows: the scroller below the reader's header. */
   bounds(): DOMRect | null;
@@ -259,7 +259,7 @@ export function epubView(o: {
     },
     reveal: (locator) => locator.kind === "epub" && o.goToSection(locator.sectionId),
     label: (locator, fraction) =>
-      locator.kind === "epub" ? `On ${o.sectionLabel(locator.sectionId) ?? "this chapter"}` : percentLabel(fraction),
+      locator.kind === "epub" ? o.sectionLabel(locator.sectionId) ?? "This chapter" : percentLabel(fraction),
   });
 }
 
@@ -327,6 +327,6 @@ export function pdfView(o: {
         behavior,
       });
     },
-    label: (locator, fraction) => (locator.kind === "page" ? `On p. ${locator.page}` : percentLabel(fraction)),
+    label: (locator, fraction) => (locator.kind === "page" ? `p. ${locator.page}` : percentLabel(fraction)),
   });
 }

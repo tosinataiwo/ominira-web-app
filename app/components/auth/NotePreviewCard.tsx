@@ -49,7 +49,7 @@ export default function NotePreviewCard({ pseudonym }: { pseudonym: string }) {
 
         <div className="flex flex-col gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <AuthorAvatar name={name} />
+            <AuthorAvatar author={{ readerId: "", pseudonym: name, city: null, avatar: null }} />
             <div className="min-w-0 flex-1">
               <AuthorRow name={name} savedAt={savedAt} />
             </div>

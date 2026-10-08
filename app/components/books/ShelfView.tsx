@@ -202,7 +202,7 @@ export default function ShelfView() {
 
   const header = (
     <div className="mt-1 mb-7">
-      <h1 className="m-0 font-serif text-2xl font-bold text-[var(--reader-text)]">Shelf</h1>
+      <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">Shelf</h1>
     </div>
   );
 
@@ -275,7 +275,7 @@ export default function ShelfView() {
           {savedNotes?.length ? (
             <div className="mx-auto mt-10 max-w-[640px]">
               {savedBooks?.length ? (
-                <h2 className="m-0 mb-1 font-serif text-base font-bold text-[var(--reader-text)]">Saved posts</h2>
+                <h2 className="font-serif type-3 text-balance m-0 mb-1 text-[var(--reader-text)]">Saved posts</h2>
               ) : null}
               <div className="flex flex-col">
                 {savedNotes.map((item) => (

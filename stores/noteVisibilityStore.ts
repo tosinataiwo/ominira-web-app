@@ -15,11 +15,8 @@ type NoteVisibilityState = {
   setLastVisibility: (v: NoteVisibility) => void;
 };
 
-/** A composing preference, not reading-position/typography state — kept in
- * its own tiny store rather than folded into reader-store.ts, which is
- * explicitly scoped to "durable, cross-book preferences" (its own doc
- * comment) and already carries a versioned migrate() history for that
- * narrower set of fields; this one field has nothing to do with any of it.
+/** A composing preference — kept in its own tiny store rather than folded
+ * into reader-store.ts, which holds only the theme.
  * No skipHydration/manual-rehydrate dance either — unlike theme (rendered
  * on first paint), nothing here is read before a reader has already
  * clicked into a composer, well after this store's had time to hydrate. */

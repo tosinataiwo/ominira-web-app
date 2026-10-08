@@ -9,6 +9,8 @@ export type RoomInfo = {
   title: string;
   bookTitle: string;
   bookAuthor: string;
+  /** For the reader's URL, `/reader/{bookSlug}`. */
+  bookSlug: string;
   startedBy: string;
   startedAt: string;
   maxMembers: number;

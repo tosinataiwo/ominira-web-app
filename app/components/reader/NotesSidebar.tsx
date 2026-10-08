@@ -124,15 +124,14 @@ function EditPanel({
       onClose={onClose}
       footer={
         // Same bottom-docked composer as the book-wide feed panel
-        // (BookAnnotationFeedPanel) — pinned below the scrollable thread
+        // (FeedPanel) — pinned below the scrollable thread
         // regardless of scroll position, not part of the flowing content.
         // Hidden during the delete-confirmation step so there's no
         // competing action while that warning is up.
         !confirmingDelete && (
           <NoteComposer
             initialText=""
-            placeholder="Add a note"
-            startCollapsed
+            placeholder="Share a note"
             showMemberPrompt
             action="note"
             draftKey={`highlight-${materialId}-${JSON.stringify(ranges)}`}
@@ -191,7 +190,7 @@ function EditPanel({
       {sortedRoots.length === 0 && <HighlightCard text={quoteText} />}
       {confirmingDelete ? (
         <div className="flex flex-col gap-3 pb-1">
-          <p className="text-sm font-literata leading-relaxed text-[var(--reader-text)] m-0">
+          <p className="font-serif type-4 text-[var(--reader-text)] m-0">
             {roots.length > 0
               ? "Delete this highlight and its notes? This can't be undone."
               : "Delete this highlight? This can't be undone."}

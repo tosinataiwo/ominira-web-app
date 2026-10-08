@@ -8,18 +8,19 @@ import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useLayoutStore } from "@/stores/layout-store";
-import { roomChatUnread, useRoomStore } from "@/stores/room-store";
+import RoomButton, { useRoomEntry } from "@/app/components/room/RoomButton";
+import { useFollowTap } from "@/lib/room/hooks";
 import { LiveBadge, LiveMark, compact, notesLabel, usePresence, type Live } from "./ReaderPresence";
 import { avatarRingColor, type Avatar } from "@/lib/avatar/avatar";
-import type { BookAnnotationFeed, NoteAuthor } from "@/lib/reader/useBookAnnotationFeed";
+import type { Feed, NoteAuthor } from "@/lib/reader/useFeed";
 
 type Props = {
   materialId: string;
-  /** The book's notes feed (useBookAnnotationFeed) — the rail reads its
+  /** The book's notes feed (useFeed) — the rail reads its
    * authors and count, and opens it: toggled from the chat bubble, narrowed
    * to one comrade from their card. Every format hands over its own feed and
    * this does the rest, so the rail behaves the same in all of them. */
-  feed: BookAnnotationFeed;
+  feed: Feed;
   /** The run the reader is in, so whoever wrote there leads the faces. */
   activeSectionId?: string;
   /** Closes the per-thread notes panel — it shares the feed's slot, so the
@@ -106,15 +107,18 @@ export default function NotesFeedFab({
     closeNotesPanel();
     feed.openFeed(readerId);
   };
-  // In the room on this book, the notes button carries room chat's unread
-  // count instead and opens the chat (spec §1.4).
-  const chatUnread = useRoomStore((s) => roomChatUnread(s, materialId)) ?? 0;
   const onOpenFeed = () => {
     if (feed.open) return feed.close();
     closeNotesPanel();
-    if (chatUnread > 0) feed.openChat();
-    else feed.openFeed();
+    feed.openFeed();
   };
+  // The book's room — started, joined and opened from the rail, and marked
+  // on the folded FAB while it's on.
+  const room = useRoomEntry(materialId);
+  const roomOn = room !== null && room.state !== "start";
+  // In the room on this book, a tap on a fellow member's face follows them
+  // (spec §1.6) rather than opening their card.
+  const { tap, followingId } = useFollowTap();
   const { data: me } = useProfile();
   const presence = usePresence(materialId);
   const roomPlayerHeight = useLayoutStore((s) => s.roomPlayerHeight);
@@ -223,17 +227,15 @@ export default function NotesFeedFab({
   const summary = [notesLine, presence.count > 0 && `${presence.count} currently ${liveWord}`].filter(Boolean).join(", ");
 
   const overflow = faces.length - shown.length;
-  const badgeCount = chatUnread || noteCount;
-  const badge = badgeCount > 0 && (
-    <span
-      className={`reader-face-in absolute right-0 top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none tabular-nums ring-2 ring-[var(--reader-surface)] ${
-        chatUnread ? "bg-brand-500 text-white" : "bg-[var(--reader-accent)] text-[var(--reader-bg)]"
-      }`}
-    >
-      {badgeCount > 99 ? "99+" : badgeCount}
+  const badge = noteCount > 0 && (
+    <span className="reader-face-in absolute right-0 top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[var(--reader-accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-[var(--reader-bg)] ring-2 ring-[var(--reader-surface)]">
+      {noteCount > 99 ? "99+" : noteCount}
     </span>
   );
-  const chatLabel = chatUnread > 0 && `${chatUnread} unread in room chat`;
+  const roomLabel =
+    room?.state === "in"
+      ? `in the room${room.unread > 0 ? `, ${room.unread} unread` : ""}`
+      : room?.state === "live" && "a room is live";
 
   return (
     <div
@@ -272,7 +274,7 @@ export default function NotesFeedFab({
         // × folds it again.
         <button
           onClick={() => setFolded(false)}
-          aria-label={`Show readers — ${[chatLabel, summary].filter(Boolean).join(", ")}`}
+          aria-label={`Show readers — ${[roomLabel, summary].filter(Boolean).join(", ")}`}
           aria-expanded={false}
           title="Show readers"
           className="reader-face-in group relative flex cursor-pointer items-center rounded-full p-1 transition-transform duration-150 hover:scale-[1.03] active:scale-95"
@@ -280,7 +282,7 @@ export default function NotesFeedFab({
           <span className="reader-story-ring relative flex-none origin-bottom-right scale-[0.75] shell:scale-100">
             <MyFace me={me} />
           </span>
-          {chatUnread > 0 && (
+          {roomOn && (
             <span
               aria-hidden="true"
               className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-brand-500 ring-2 ring-[var(--reader-surface)]"
@@ -301,45 +303,52 @@ export default function NotesFeedFab({
           {shown.length > 0 && (
             <>
               <div className="flex flex-row items-center shell:flex-col">
-                {shown.map((f, i) => (
-                  <button
-                    key={f.readerId}
-                    onClick={() => toggleCard(f)}
-                    aria-label={faceLabel(f)}
-                    aria-expanded={card?.readerId === f.readerId}
-                    title={faceLabel(f)}
-                    style={{ animationDelay: `${i * 70}ms`, zIndex: MAX_FACES + 1 - i }}
-                    className={`reader-face-in relative cursor-pointer rounded-full transition-transform duration-150 hover:z-10 hover:scale-105 active:scale-95 ${
-                      i > 0 ? "-ml-2 shell:ml-0 shell:-mt-2" : ""
-                    }`}
-                  >
-                    <span
-                      className="reader-story-ring block"
-                      data-plain={(f.live !== "read" && !f.wroteHere) || undefined}
-                      data-seen={(f.live !== "read" && f.wroteHere && seen.has(f.readerId)) || undefined}
+                {shown.map((f, i) => {
+                  const follow = tap(f.readerId);
+                  const following = followingId === f.readerId;
+                  const label = follow
+                    ? `${following ? "Stop following" : "Follow"} ${comradeName(f.pseudonym)}`
+                    : faceLabel(f);
+                  return (
+                    <button
+                      key={f.readerId}
+                      onClick={follow ?? (() => toggleCard(f))}
+                      aria-label={label}
+                      {...(follow ? { "aria-pressed": following } : { "aria-expanded": card?.readerId === f.readerId })}
+                      title={label}
+                      style={{ animationDelay: `${i * 70}ms`, zIndex: MAX_FACES + 1 - i }}
+                      className={`reader-face-in relative cursor-pointer rounded-full transition-transform duration-150 hover:z-10 hover:scale-105 active:scale-95 ${
+                        i > 0 ? "-ml-2 shell:ml-0 shell:-mt-2" : ""
+                      }`}
                     >
-                      <ReaderAvatar
-                        pseudonym={f.pseudonym}
-                        avatar={f.avatar}
-                        size={32}
-                        className="ring-2 ring-[var(--reader-surface)]"
-                      />
-                    </span>
-                    {f.live === "listen" && <LiveBadge live={f.live} className="absolute bottom-0 right-0" />}
-                  </button>
-                ))}
+                      <span
+                        className="reader-story-ring block"
+                        data-plain={(f.live !== "read" && !f.wroteHere) || undefined}
+                        data-seen={(f.live !== "read" && f.wroteHere && seen.has(f.readerId)) || undefined}
+                      >
+                        <ReaderAvatar
+                          pseudonym={f.pseudonym}
+                          avatar={f.avatar}
+                          size={32}
+                          className="ring-2 ring-[var(--reader-surface)]"
+                        />
+                      </span>
+                      {f.live === "listen" && <LiveBadge live={f.live} className="absolute bottom-0 right-0" />}
+                    </button>
+                  );
+                })}
                 {overflow > 0 && (
                   // A member of the stack, not a notification tally — "+12"
-                  // reads as twelve more comrades.
-                  <button
-                    onClick={onOpenFeed}
+                  // reads as twelve more comrades. Not tappable for now.
+                  <span
+                    role="img"
                     aria-label={`${overflow} more ${overflow === 1 ? "comrade" : "comrades"}`}
                     title={`${overflow} more`}
                     style={{ animationDelay: `${MAX_FACES * 70}ms` }}
-                    className="reader-face-in relative -ml-2 flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full border border-[var(--reader-accent)] bg-[color-mix(in_srgb,var(--reader-accent)_12%,var(--reader-surface))] text-[11px] font-bold tabular-nums text-[var(--reader-accent)] ring-2 ring-[var(--reader-surface)] transition-transform duration-150 hover:scale-105 active:scale-95 shell:ml-0 shell:-mt-2"
+                    className="reader-face-in relative -ml-2 flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[var(--reader-accent)] bg-[color-mix(in_srgb,var(--reader-accent)_12%,var(--reader-surface))] text-[11px] font-bold tabular-nums text-[var(--reader-accent)] ring-2 ring-[var(--reader-surface)] shell:ml-0 shell:-mt-2"
                   >
                     +{compact(overflow)}
-                  </button>
+                  </span>
                 )}
               </div>
             </>
@@ -347,13 +356,22 @@ export default function NotesFeedFab({
 
           <button
             onClick={onOpenFeed}
-            aria-label={chatLabel || (noteCount > 0 ? `Open all ${notesLabel(noteCount)}` : "Leave the first note")}
-            title={chatLabel ? "Open room chat" : noteCount > 0 ? "Open all notes" : "Leave the first note"}
+            aria-label={noteCount > 0 ? `Open all ${notesLabel(noteCount)}` : "Leave the first note"}
+            title={noteCount > 0 ? "Open all notes" : "Leave the first note"}
             className="relative flex h-10 w-10 flex-none cursor-pointer items-center justify-center rounded-full text-[var(--reader-text-muted)] transition-colors hover:bg-[var(--reader-surface-hover)]"
           >
             <MessageCircle size={21} strokeWidth={2} />
             {badge}
           </button>
+          <RoomButton
+            materialId={materialId}
+            onOpen={() => {
+              setCard(null);
+              setIntro(false);
+              closeNotesPanel();
+              feed.openRoom();
+            }}
+          />
 
           <span aria-hidden="true" className="h-6 w-px bg-[var(--reader-border)] shell:h-px shell:w-6" />
           <button

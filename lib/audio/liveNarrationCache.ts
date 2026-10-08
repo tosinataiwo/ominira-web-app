@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { Passage } from "@/lib/book/schema";
 import type { KaraokeWord } from "@/lib/audio/karaoke";
-import { passageChunkTexts } from "@/lib/audio/narrationText";
+import { chunkWordOffsets, passageChunkTexts } from "@/lib/audio/narrationText";
 
 export type LiveClip = {
   status: "loading" | "ready" | "error";
@@ -184,6 +184,9 @@ function fetchClip(bookSlug: string, passage: Passage, chunkIndex: number, voice
   // text is right here; the server (app/api/narration/route.ts) doesn't
   // look anything up by id, it just synthesizes whatever text it's given.
   const text = passageChunkTexts(passage)[chunkIndex];
+  // Words spoken by this passage's earlier chunks, so word indexes run
+  // passage-wide (KaraokeWord.index).
+  const wordOffset = chunkWordOffsets(passage)[chunkIndex] ?? 0;
 
   // TEMP diagnostic (remove once the freeze-after-jumping report is
   // confirmed/ruled out) — `enqueuedAt` is captured here, before the job
@@ -221,7 +224,13 @@ function fetchClip(bookSlug: string, passage: Passage, chunkIndex: number, voice
           status: "ready",
           src,
           durationMs: meta.durationMs,
-          words: meta.words.map((w) => ({ passageId: passage.id, text: w.word, startMs: w.startMs, endMs: w.endMs })),
+          words: meta.words.map((w, i) => ({
+            passageId: passage.id,
+            index: wordOffset + i,
+            text: w.word,
+            startMs: w.startMs,
+            endMs: w.endMs,
+          })),
           error: undefined,
         });
       } catch (err) {

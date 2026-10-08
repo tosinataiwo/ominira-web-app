@@ -50,7 +50,7 @@ export async function joinRoom(
 
   const { data: book, error: bookError } = await admin
     .from("materials")
-    .select("title, author")
+    .select("title, author, slug")
     .eq("id", room.material_id)
     .single();
   if (bookError) throw bookError;
@@ -64,6 +64,7 @@ export async function joinRoom(
         title: roomTitle(room.title, book.title),
         bookTitle: book.title,
         bookAuthor: book.author,
+        bookSlug: book.slug,
         startedBy: room.started_by,
         startedAt: room.started_at,
         maxMembers: room.max_members,

@@ -23,6 +23,7 @@ const member = (readerId: string, extra: Partial<RoomPresence> = {}): RoomPresen
   sends: false,
   micOnAt: null,
   handRaisedAt: null,
+  readingAloud: null,
   followingId: null,
   progressPct: 0,
   mode: "read",
@@ -48,9 +49,11 @@ describe("nextFollow", () => {
     expect(nextFollow(following, { type: "stop" })).toEqual(NOT_FOLLOWING);
   });
 
-  test("a summon from the one you follow brings you back; from anyone else it doesn't", () => {
+  test("a summon makes you follow the moderator", () => {
     expect(nextFollow(paused, { type: "summoned", from: "ada" })).toEqual(following);
-    expect(nextFollow(paused, { type: "summoned", from: "sekou" })).toBe(paused);
+    expect(nextFollow(following, { type: "summoned", from: "ada" })).toBe(following);
+    expect(nextFollow(NOT_FOLLOWING, { type: "summoned", from: "ada" })).toEqual(following);
+    expect(nextFollow(paused, { type: "summoned", from: "sekou" })).toEqual({ targetId: "sekou", paused: false });
   });
 
   test("the followed reader leaving stops following", () => {

@@ -49,9 +49,8 @@ export function articleBlocks(contentEl: HTMLElement): HTMLElement[] {
  * scrolling container wrapping one `.reader-article` element whose top-level
  * children are the blocks (see articleBlocks).
  *
- * A block index, not a scroll offset or fraction: the reader can change font
- * size, line height and column width at any time (useArticleTypographyStyle),
- * which reflows everything and invalidates any pixel-based position, while
+ * A block index, not a scroll offset or fraction: the text reflows with the
+ * viewport (the reading tokens change size at 768px), which reflows everything and invalidates any pixel-based position, while
  * the block sequence itself is stable.
  *
  * Returns the two refs to attach. They're callback refs rather than plain ref
