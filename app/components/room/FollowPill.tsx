@@ -15,10 +15,12 @@ import { useRoomStore } from "@/stores/room-store";
 const pill = "pointer-events-auto flex h-9 max-w-full items-center rounded-full text-sm font-bold shadow-sm";
 const close = "flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full";
 
-export default function FollowPill() {
+/** `pausedOnly`: with the mini-player minimised, only "Return to Ada" —
+ * the one you'd act on — keeps its place over the page. */
+export default function FollowPill({ pausedOnly = false }: { pausedOnly?: boolean }) {
   const following = useFollowing();
   const session = useRoomStore((s) => s.session);
-  if (!following || !session) return null;
+  if (!following || !session || (pausedOnly && !following.paused)) return null;
   const name = comradeName(following.member.name);
   const Arrow = following.direction === "up" ? ArrowUp : ArrowDown;
 

@@ -13,7 +13,9 @@ import { useAudioStore } from "@/stores/audio-store";
 // hears (RoomNarration): playing it with the mic on sends the narrator's voice
 // in place of yours.
 
-export default function MicToggle({ className }: { className: string }) {
+/** `iconOnly`: just the icon (the minimised mini-player), the label moving
+ * to aria-label/title. */
+export default function MicToggle({ className, iconOnly = false }: { className: string; iconOnly?: boolean }) {
   const session = useRoomStore((s) => s.session);
   const controls = useRoomControls();
   const narrator = useAudioStore((s) => voiceById(s.voice)?.name ?? "Narrator");
@@ -37,6 +39,7 @@ export default function MicToggle({ className }: { className: string }) {
       type="button"
       disabled={connection === "connecting" || acquiring}
       aria-pressed={micOn}
+      {...(iconOnly ? { "aria-label": label, title: label } : {})}
       onClick={() => {
         // In this tap, so the browser lets the narration's audio graph start.
         if (!micOn) tapNarration();
@@ -51,7 +54,7 @@ export default function MicToggle({ className }: { className: string }) {
       }`}
     >
       <Icon size={18} strokeWidth={1.75} className={acquiring ? "animate-spin" : undefined} />
-      {label}
+      {!iconOnly && label}
     </button>
   );
 }

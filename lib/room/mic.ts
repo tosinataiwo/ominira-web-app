@@ -2,8 +2,12 @@
 // never at join. Off hands peers null (replaceTrack, zero packets) but keeps
 // the track for 60 s, so on again is instant; then the device is released
 // (the OS mic indicator goes off) and the next on reacquires it silently.
+// Not on iOS: WebKit asks for permission again on every getUserMedia once
+// the last track has stopped, so there the track is kept for the whole room
+// and the prompt comes once per room.
 
 import { setAudioSessionType } from "@/lib/room/audioSession"; // REVERT: remove with the two calls below
+import { isIOSDevice } from "@/lib/pwa/platform";
 
 export type MicState = "off" | "acquiring" | "on" | "blocked";
 
@@ -27,12 +31,18 @@ type Options = {
   /** The track to send: live while on, null while off. */
   onChange: (state: MicState, track: MediaStreamTrack | null) => void;
   media?: Pick<MediaDevices, "getUserMedia" | "addEventListener" | "removeEventListener">;
-  releaseAfterMs?: number;
+  /** null: keep the track until close. */
+  releaseAfterMs?: number | null;
 };
 
 export function createMic(options: Options): Mic {
   const media = options.media ?? navigator.mediaDevices;
-  const releaseAfterMs = options.releaseAfterMs ?? RELEASE_AFTER_MS;
+  const releaseAfterMs =
+    options.releaseAfterMs !== undefined
+      ? options.releaseAfterMs
+      : typeof navigator !== "undefined" && isIOSDevice()
+        ? null
+        : RELEASE_AFTER_MS;
   let state: MicState = "off";
   let track: MediaStreamTrack | null = null;
   let wanted = false;
@@ -54,7 +64,7 @@ export function createMic(options: Options): Mic {
   };
 
   const scheduleRelease = () => {
-    if (track && !releaseTimer) releaseTimer = setTimeout(release, releaseAfterMs);
+    if (track && !releaseTimer && releaseAfterMs !== null) releaseTimer = setTimeout(release, releaseAfterMs);
   };
 
   // One getUserMedia at a time; a second caller waits on the same one.

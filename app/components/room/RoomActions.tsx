@@ -24,33 +24,39 @@ const iconButton =
  * panel is already open. */
 export const ROOM_CHAT_ID = "room-chat";
 
+/** The way into the room's chat — the Room tab — with your unread count;
+ * also the minimised mini-player's way back to the full room. */
+export function ChatButton({ onClick, className }: { onClick: () => void; className: string }) {
+  const unread = useRoom((s) => s.chat.unread) ?? 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={unread > 0 ? `Open the chat, ${unread} unread` : "Open the chat"}
+      title="Chat"
+      className={`${className} relative ${
+        unread > 0
+          ? "border-[var(--reader-accent)] text-[var(--reader-accent)]"
+          : "border-[var(--reader-border)] text-[var(--reader-text)]"
+      } bg-[var(--reader-surface)]`}
+    >
+      <MessageCircle size={18} strokeWidth={1.75} />
+      <UnreadBadge count={unread} className="absolute -top-1 -right-1 ring-2 ring-[var(--reader-surface)]" />
+    </button>
+  );
+}
+
 export default function RoomActions({ onChat }: { onChat?: () => void }) {
   const session = useRoomStore((s) => s.session);
   const controls = useRoomControls();
   const inReader = useReaderView() !== null;
-  const unread = useRoom((s) => s.chat.unread) ?? 0;
   if (!controls || !session) return null;
   const { handRaised, connection, isModerator } = controls;
 
   return (
     // Wraps on narrow phones rather than running past the card's edges.
     <div className="relative flex min-w-0 flex-wrap items-center justify-center gap-2 shell:gap-3">
-      {onChat && (
-        <button
-          type="button"
-          onClick={onChat}
-          aria-label={unread > 0 ? `Open the chat, ${unread} unread` : "Open the chat"}
-          title="Chat"
-          className={`${iconButton} relative ${
-            unread > 0
-              ? "border-[var(--reader-accent)] text-[var(--reader-accent)]"
-              : "border-[var(--reader-border)] text-[var(--reader-text)]"
-          } bg-[var(--reader-surface)]`}
-        >
-          <MessageCircle size={18} strokeWidth={1.75} />
-          <UnreadBadge count={unread} className="absolute -top-1 -right-1 ring-2 ring-[var(--reader-surface)]" />
-        </button>
-      )}
+      {onChat && <ChatButton onClick={onChat} className={iconButton} />}
       <button
         type="button"
         disabled={connection === "connecting"}

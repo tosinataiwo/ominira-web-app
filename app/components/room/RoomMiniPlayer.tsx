@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Maximize2 } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import MicToggle from "./MicToggle";
 import FollowPill from "./FollowPill";
 import { RisingReactions } from "./Reactions";
-import RoomActions, { ROOM_CHAT_ID } from "./RoomActions";
+import RoomActions, { ChatButton, ROOM_CHAT_ID } from "./RoomActions";
 import RoomAvatar from "./RoomAvatar";
 import { useBottomDock, useNarrationBarHeight } from "@/app/components/useBottomDock";
 import { isIOSDevice } from "@/lib/pwa/platform";
@@ -23,16 +24,21 @@ import { showToast } from "@/stores/toast-store";
 // of everything docked below it — the narration bar and, in the reader, the
 // chapter footer, sliding down when the footer tucks away (on phones,
 // contents stacked, C1; from the shell breakpoint, one row at max 840px, C2). In the
-// app shell, so it survives leaving the reader. Expanding it opens the
+// app shell, so it survives leaving the reader. Its chat button opens the
 // book's feed panel on its Room tab (back in the book, when you've left
 // it); it stays up while that panel is open, holding the controls, so the
 // panel's Room tab is just who's here and the chat. Its status line carries
 // the states of spec §10. In the book's reader, the follow pill floats just
 // above it. Leave room, and End room for a moderator, sit in RoomExit.
+// Minimised, it folds to a pill — who's heard, chat and your mic — to give
+// the page back.
 
 // Your mic, hand, reactions and the way into the chat are RoomActions.
 const useHereButton =
   "flex h-11 items-center justify-center gap-2 rounded-sm border px-3.5 text-[14px] font-bold whitespace-nowrap cursor-pointer transition-colors shell:h-10 shell:flex-none";
+
+const pillButton =
+  "flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-full border transition-colors disabled:cursor-default disabled:opacity-50";
 
 const IOS_NOTE_KEY = "ominira-room-ios-note";
 
@@ -53,6 +59,8 @@ export default function RoomMiniPlayer() {
   const footerHeight = useLayoutStore((s) => s.readerFooterHeight);
   const below = dock.bottom + narrationHeight + footerHeight;
   const setRoomPlayerHeight = useLayoutStore((s) => s.setRoomPlayerHeight);
+  const minimised = useLayoutStore((s) => s.roomPlayerMinimised);
+  const setMinimised = useLayoutStore((s) => s.setRoomPlayerMinimised);
   const openRoom = useOpenRoom();
   const materialId = useRoom((s) => s.room.materialId);
   const join = useRoomStore((s) => s.join);
@@ -104,6 +112,8 @@ export default function RoomMiniPlayer() {
   if (!controls || !session) return null;
   const { elsewhere, audioSuspended } = controls;
   const blocked = status === "Mic blocked";
+  // Into the Room tab, or, already there, down to its chat.
+  const onChat = () => (expanded ? scrollToChat() : openRoom(materialId!));
 
   return (
     <div
@@ -115,88 +125,130 @@ export default function RoomMiniPlayer() {
     >
       {inReader && !elsewhere && (
         <div className="pointer-events-none absolute inset-x-0 bottom-full flex flex-wrap justify-center gap-2 px-3 pb-2 empty:hidden">
-          <FollowPill />
+          <FollowPill pausedOnly={minimised} />
         </div>
       )}
-      <div className="pointer-events-auto relative flex flex-col gap-3 rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5 pt-3.5 pb-1.5 shadow-md shell:w-full shell:max-w-[840px] shell:flex-row shell:flex-wrap shell:items-center shell:gap-x-4 shell:gap-y-2 shell:py-3 shell:pr-13 shell:pl-3.5">
-        {!elsewhere && <RisingReactions />}
-        {!elsewhere && !expanded && (
-          <button
-            type="button"
-            onClick={() => openRoom(materialId!)}
-            aria-label="Open the room"
-            title="Open the room"
-            className="absolute top-2.5 right-2.5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-sm text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] shell:top-1.5 shell:right-1.5 shell:h-8 shell:w-8"
-          >
-            <Maximize2 size={18} strokeWidth={1.75} />
-          </button>
-        )}
-
-        <div className={`flex min-w-0 items-center gap-3 shell:flex-1 shell:pr-0 ${expanded ? "" : "pr-10"}`}>
+      {minimised ? (
+        // Minimised: a small pill at the side — who's heard, your mic, and the
+        // way back — so the page is the reader's again.
+        <div className="pointer-events-auto relative flex max-w-full items-center gap-2 self-end rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] py-1 pr-1 pl-1 shadow-md shell:self-center">
+          {!elsewhere && <RisingReactions />}
           {featured && (
             <RoomAvatar
               member={featured}
-              size={40}
+              size={32}
               pressed={featured.readerId === followingId}
               onClick={featured.readerId !== me && !elsewhere ? () => session.follow(featured.readerId) : undefined}
             />
           )}
-          <div className="flex min-w-0 flex-col items-start gap-0.5">
-            <span className="max-w-full truncate text-[14px] font-bold text-[var(--reader-text)]">{title}</span>
-            {audioSuspended && !elsewhere ? (
-              <button
-                type="button"
-                onClick={() => void session.resumeAudio()}
-                className="max-w-full cursor-pointer truncate text-xs font-bold text-[var(--reader-accent)] underline underline-offset-2"
-              >
-                Tap to resume audio
-              </button>
-            ) : (
-              <span className="flex max-w-full items-baseline gap-1.5 text-xs font-bold">
-                <span className="truncate text-[var(--reader-accent)]">{status}</span>
-                {blocked && (
-                  <button
-                    type="button"
-                    onClick={() => showToast(micBlockedHelp(navigator.userAgent, isIOSDevice()))}
-                    className="flex-none cursor-pointer text-[var(--reader-text-muted)] underline underline-offset-2 hover:text-[var(--reader-text)]"
-                  >
-                    How to allow it
-                  </button>
-                )}
-              </span>
-            )}
-            <span aria-live="polite" className="sr-only">
-              {announced}
-            </span>
-            <RoomExit className="-ml-1.5 hidden shell:flex" button="h-6.5 px-1.5 text-xs" />
-          </div>
-        </div>
-
-        {elsewhere ? (
-          // Joining again here makes the other tab yield instead.
+          {audioSuspended && !elsewhere ? (
+            <button
+              type="button"
+              onClick={() => void session.resumeAudio()}
+              className="min-w-0 cursor-pointer truncate text-xs font-bold text-[var(--reader-accent)] underline underline-offset-2"
+            >
+              Tap to resume audio
+            </button>
+          ) : (
+            <span className="min-w-0 max-w-[10rem] truncate text-xs font-bold text-[var(--reader-accent)]">{status}</span>
+          )}
+          {!elsewhere && (
+            <>
+              <ChatButton onClick={onChat} className={pillButton} />
+              <MicToggle iconOnly className={pillButton} />
+            </>
+          )}
           <button
             type="button"
-            onClick={() =>
-              void join(roomId!).catch((err) => showToast(err instanceof Error ? err.message : "Couldn't join the room."))
-            }
-            className={`${useHereButton} border-[var(--reader-accent)] bg-transparent text-[var(--reader-accent)]`}
+            onClick={() => setMinimised(false)}
+            aria-label="Show the room player"
+            title="Show the room player"
+            className="flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-full text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)]"
           >
-            Use here
+            <ChevronUp size={18} strokeWidth={1.75} />
           </button>
-        ) : (
-          <RoomActions
-            onChat={() => (expanded ? scrollToChat() : openRoom(materialId!))}
-          />
-        )}
+          <span aria-live="polite" className="sr-only">
+            {announced}
+          </span>
+        </div>
+      ) : (
+        <div className="pointer-events-auto relative flex flex-col gap-3 rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5 pt-3.5 pb-1.5 shadow-md shell:w-full shell:max-w-[840px] shell:flex-row shell:flex-wrap shell:items-center shell:gap-x-4 shell:gap-y-2 shell:py-3 shell:pr-13 shell:pl-3.5">
+          {!elsewhere && <RisingReactions />}
+          {/* The chat button is the way into the full room. */}
+          <button
+            type="button"
+            onClick={() => setMinimised(true)}
+            aria-label="Minimise the room player"
+            title="Minimise"
+            className="absolute top-2.5 right-2.5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-sm text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] shell:top-1.5 shell:right-1.5 shell:h-8 shell:w-8"
+          >
+            <ChevronDown size={18} strokeWidth={1.75} />
+          </button>
 
-        {iosNote && !elsewhere && (
-          <p className="text-xs text-[var(--reader-text-muted)] shell:basis-full">
-            Keep Ominira open to keep listening. Audio stops when your screen locks.
-          </p>
-        )}
+          <div className={`flex min-w-0 items-center gap-3 shell:flex-1 shell:pr-0 pr-10`}>
+            {featured && (
+              <RoomAvatar
+                member={featured}
+                size={40}
+                pressed={featured.readerId === followingId}
+                onClick={featured.readerId !== me && !elsewhere ? () => session.follow(featured.readerId) : undefined}
+              />
+            )}
+            <div className="flex min-w-0 flex-col items-start gap-0.5">
+              <span className="max-w-full truncate text-[14px] font-bold text-[var(--reader-text)]">{title}</span>
+              {audioSuspended && !elsewhere ? (
+                <button
+                  type="button"
+                  onClick={() => void session.resumeAudio()}
+                  className="max-w-full cursor-pointer truncate text-xs font-bold text-[var(--reader-accent)] underline underline-offset-2"
+                >
+                  Tap to resume audio
+                </button>
+              ) : (
+                <span className="flex max-w-full items-baseline gap-1.5 text-xs font-bold">
+                  <span className="truncate text-[var(--reader-accent)]">{status}</span>
+                  {blocked && (
+                    <button
+                      type="button"
+                      onClick={() => showToast(micBlockedHelp(navigator.userAgent, isIOSDevice()))}
+                      className="flex-none cursor-pointer text-[var(--reader-text-muted)] underline underline-offset-2 hover:text-[var(--reader-text)]"
+                    >
+                      How to allow it
+                    </button>
+                  )}
+                </span>
+              )}
+              <span aria-live="polite" className="sr-only">
+                {announced}
+              </span>
+              <RoomExit className="-ml-1.5 hidden shell:flex" button="h-6.5 px-1.5 text-xs" />
+            </div>
+          </div>
 
-        <RoomExit className="justify-center gap-2 shell:hidden" button="h-9 px-4 text-sm" />
-      </div>
+          {elsewhere ? (
+            // Joining again here makes the other tab yield instead.
+            <button
+              type="button"
+              onClick={() =>
+                void join(roomId!).catch((err) => showToast(err instanceof Error ? err.message : "Couldn't join the room."))
+              }
+              className={`${useHereButton} border-[var(--reader-accent)] bg-transparent text-[var(--reader-accent)]`}
+            >
+              Use here
+            </button>
+          ) : (
+            <RoomActions onChat={onChat} />
+          )}
+
+          {iosNote && !elsewhere && (
+            <p className="text-xs text-[var(--reader-text-muted)] shell:basis-full">
+              Keep Ominira open to keep listening. Audio stops when your screen locks.
+            </p>
+          )}
+
+          <RoomExit className="justify-center gap-2 shell:hidden" button="h-9 px-4 text-sm" />
+        </div>
+      )}
     </div>
   );
 }
