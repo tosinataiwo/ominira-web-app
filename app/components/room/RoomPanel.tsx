@@ -19,8 +19,8 @@ import { useRoomStore } from "@/stores/room-store";
 // with the count and the time, the room's title over its book, then
 // Speakers, Hands raised, Listening and Chat on one page, each under its
 // heading. The controls stay in the mini-player, which shows alongside;
-// the chat's composer is the panel's footer (RoomChatComposer). A tap on a
-// face follows (spec §1.6). Loaded by FeedPanel only while you're in the
+// the chat's composer is the panel's footer (RoomChatComposer). Each
+// member's row has a Read along button (spec §1.6). Loaded by FeedPanel only while you're in the
 // room on this book.
 
 /** Who's here and the chat, the Room tab's body. */
@@ -160,7 +160,7 @@ function Member({
   const line = [member.isModerator && "Host", status, after].filter(Boolean).join(" · ");
   return (
     <div className="flex items-center gap-3 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] py-2.5 pr-2 pl-3">
-      <RoomAvatar member={member} size={stage ? 44 : 40} pressed={pressed} onClick={onClick} />
+      <RoomAvatar member={member} size={stage ? 44 : 40} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-[13px] text-[var(--reader-text)] font-semibold">{comradeName(member.name)}</span>
         <span
@@ -171,6 +171,21 @@ function Member({
           {line}
         </span>
       </div>
+      {onClick && (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-pressed={pressed}
+          aria-label={`${pressed ? "Stop reading along with" : "Read along with"} ${comradeName(member.name)}`}
+          className={`flex-none cursor-pointer rounded-sm px-1.5 text-xs font-bold whitespace-nowrap ${
+            pressed
+              ? "text-[var(--reader-accent)] hover:opacity-80"
+              : "text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
+          }`}
+        >
+          {pressed ? "Stop reading along" : "Read along"}
+        </button>
+      )}
     </div>
   );
 }

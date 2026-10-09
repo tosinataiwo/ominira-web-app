@@ -17,6 +17,7 @@ import PanelShell from "./notes/PanelShell";
 import HighlightCard from "./notes/HighlightCard";
 // import SortToggle from "./notes/SortToggle";
 import OverflowMenu from "./notes/OverflowMenu";
+import { confirmAction, DELETE_ANNOTATION } from "@/stores/confirm-store";
 
 type Props = {
   materialId: string;
@@ -45,8 +46,6 @@ type Props = {
    * quote text. */
   onShare: (quote: string) => void;
 };
-
-const DANGER_COLOR = "#f26b6b";
 
 function EditPanel({
   materialId,
@@ -88,12 +87,6 @@ function EditPanel({
   const [sortMode, setSortMode] = useState<NoteSortMode>("chronological");
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
 
-  // The header overflow menu's own "Delete highlight" confirmation step —
-  // destructive and irreversible, so it never fires straight from the menu
-  // item; it just reveals this warning in place of the thread/composer,
-  // requiring an explicit second tap to actually go through.
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-
   const { ui, actions, expandedIds, toggleExpanded } = useThreadInteraction({
     materialId,
     ranges,
@@ -101,8 +94,14 @@ function EditPanel({
     initialEditingId: editingNoteId,
   });
 
-  const handleDeleteAnnotation = () => {
+  const handleDeleteAnnotation = async () => {
     if (!existing) return;
+    // Destructive and irreversible, so the menu item asks first.
+    const ok = await confirmAction({
+      ...DELETE_ANNOTATION,
+      title: roots.length > 0 ? "Delete this highlight and its notes?" : "Delete this highlight?",
+    });
+    if (!ok) return;
     if (existing.highlightId) deleteHighlight.mutate(existing.highlightId);
     // Own root notes only — same reasoning as useTextAnnotations'
     // deleteSelection: a co-located note from another reader is never
@@ -126,9 +125,6 @@ function EditPanel({
         // Same bottom-docked composer as the book-wide feed panel
         // (FeedPanel) — pinned below the scrollable thread
         // regardless of scroll position, not part of the flowing content.
-        // Hidden during the delete-confirmation step so there's no
-        // competing action while that warning is up.
-        !confirmingDelete && (
           <NoteComposer
             initialText=""
             placeholder="Share a note"
@@ -142,10 +138,9 @@ function EditPanel({
               )
             }
           />
-        )
       }
       headerMenu={
-        existing && !confirmingDelete ? (
+        existing ? (
           <div className="relative flex-none">
             <button
               onClick={() => setPanelMenuOpen((v) => !v)}
@@ -171,7 +166,7 @@ function EditPanel({
                     icon: <Trash2 size={13} />,
                     onClick: () => {
                       setPanelMenuOpen(false);
-                      setConfirmingDelete(true);
+                      void handleDeleteAnnotation();
                     },
                   },
                 ]}
@@ -188,31 +183,7 @@ function EditPanel({
           `quote` prop passed below). Showing it in both places at once
           would repeat it once per root note. */}
       {sortedRoots.length === 0 && <HighlightCard text={quoteText} />}
-      {confirmingDelete ? (
-        <div className="flex flex-col gap-3 pb-1">
-          <p className="font-serif type-4 text-[var(--reader-text)] m-0">
-            {roots.length > 0
-              ? "Delete this highlight and its notes? This can't be undone."
-              : "Delete this highlight? This can't be undone."}
-          </p>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleDeleteAnnotation}
-              style={{ color: DANGER_COLOR }}
-              className="bg-transparent border-none cursor-pointer text-xs font-semibold p-0"
-            >
-              Delete
-            </button>
-            <button
-              onClick={() => setConfirmingDelete(false)}
-              className="bg-transparent border-none cursor-pointer text-xs font-semibold text-[var(--reader-text-muted)] p-0"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
+      <>
           {/* {roots.length > 0 && <SortToggle mode={sortMode} onChange={setSortMode} />} */}
 
           {sortedRoots.length > 0 ? (
@@ -240,8 +211,7 @@ function EditPanel({
           {ui.actionError && (
             <p className="m-0 text-[11px] text-[var(--reader-text-muted)]">{ui.actionError}</p>
           )}
-        </>
-      )}
+      </>
     </PanelShell>
   );
 }

@@ -16,6 +16,7 @@ import { useFeedStore } from "@/stores/feed-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import { useRoomStore } from "@/stores/room-store";
+import { confirmAction } from "@/stores/confirm-store";
 import { showToast } from "@/stores/toast-store";
 
 // The room's mini-player (spec §1.2): a card floating in the middle, clear
@@ -221,8 +222,14 @@ function RoomExit({ className, button }: { className: string; button: string }) 
         <button
           type="button"
           disabled={ending}
-          onClick={() => {
-            if (!window.confirm("End the room for everyone?")) return;
+          onClick={async () => {
+            const ok = await confirmAction({
+              title: "End the room?",
+              message: "It ends for everyone in it.",
+              confirmLabel: "End room",
+              danger: true,
+            });
+            if (!ok) return;
             setEnding(true);
             session.end().catch(() => {
               setEnding(false);

@@ -7,8 +7,10 @@ import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { materialKeys } from "@/lib/materials/queryKeys";
 import { useMaterialRoom } from "@/lib/room/useMaterialRoom";
 import { roomChatUnread, useRoomStore } from "@/stores/room-store";
+import { confirmAction } from "@/stores/confirm-store";
 import { showToast } from "@/stores/toast-store";
 import UnreadBadge from "./UnreadBadge";
+import { LiveBadge } from "@/app/components/reader/ReaderPresence";
 
 /** The book's room, as the notes rail shows it: whether you're in it, it's
  * live, or you could start one. Null when there's nothing to show. */
@@ -27,7 +29,7 @@ export function useRoomEntry(materialId: string) {
  * the rail, so all of the book's social side is one button away. Starts a
  * room (interim host: any signed-in reader, public books only), joins the
  * one live on the book, or, once you're in, opens the feed on its Room tab,
- * carrying chat's unread count. A live dot whenever the room is on. */
+ * carrying chat's unread count. The live equaliser whenever the room is on. */
 export default function RoomButton({ materialId, onOpen }: { materialId: string; onOpen: () => void }) {
   const entry = useRoomEntry(materialId);
   const signedIn = useIsAuthenticated();
@@ -51,6 +53,20 @@ export default function RoomButton({ materialId, onOpen }: { materialId: string;
   const onClick = async () => {
     if (entry.state === "in") return onOpen();
     if (!signedIn) return showToast("Sign in to join the room.");
+    const ok = await confirmAction(
+      entry.state === "live"
+        ? {
+            title: `Join ${entry.live.title}?`,
+            message: "You'll hear the room and can raise your hand to speak.",
+            confirmLabel: "Join room",
+          }
+        : {
+            title: "Start a reading room?",
+            message: "Anyone reading this book can join and listen in.",
+            confirmLabel: "Start room",
+          }
+    );
+    if (!ok) return;
     setPending(true);
     try {
       if (entry.state === "live") await join(entry.live.id);
@@ -77,10 +93,7 @@ export default function RoomButton({ materialId, onOpen }: { materialId: string;
         <UnreadBadge count={entry.unread} className="absolute right-0 top-0.5 ring-2 ring-[var(--reader-surface)]" />
       ) : (
         entry.state !== "start" && (
-          <span
-            aria-hidden="true"
-            className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-brand-500 ring-2 ring-[var(--reader-surface)]"
-          />
+          <LiveBadge live="listen" className="absolute right-0.5 top-0.5" />
         )
       )}
     </button>

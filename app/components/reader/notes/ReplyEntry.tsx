@@ -13,6 +13,7 @@ import ReactionButton from "./ReactionButton";
 import NoteComposer from "./NoteComposer";
 import EntryMenu from "./EntryMenu";
 import type { ThreadActions, ThreadUIState } from "@/lib/reader/threadTypes";
+import { confirmAction } from "@/stores/confirm-store";
 
 /** One reply, at the flat second tier under its top-level note — same
  * author/content/action shape as NoteThreadCard, just smaller, plus the
@@ -88,9 +89,10 @@ export default function ReplyEntry({
                         ui.startEdit(reply.id);
                         ui.toggleMenu(null);
                       }}
-                      onDelete={() => {
-                        actions.delete(reply.id);
+                      onDelete={async () => {
                         ui.toggleMenu(null);
+                        if (await confirmAction({ title: "Delete this reply?", message: "This can't be undone.", confirmLabel: "Delete", danger: true }))
+                          actions.delete(reply.id);
                       }}
                       onClose={() => ui.toggleMenu(null)}
                     />

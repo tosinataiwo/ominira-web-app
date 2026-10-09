@@ -65,8 +65,14 @@ export default function RoomAvatar({ member, size = 32, approximate, onClick, pr
   return (
     <Wrapper
       {...(onClick ? { type: "button" as const, onClick, "aria-pressed": pressed ?? false } : {})}
-      aria-label={onClick ? `Follow ${label}` : label}
-      title={onClick ? (pressed ? `Stop following ${comradeName(member.name)}` : `Follow ${comradeName(member.name)}`) : label}
+      aria-label={onClick ? `Read along with ${label}` : label}
+      title={
+        onClick
+          ? pressed
+            ? `Stop reading along with ${comradeName(member.name)}`
+            : `Read along with ${comradeName(member.name)}`
+          : label
+      }
       style={{ width: size, height: size }}
       className={`relative inline-flex flex-none rounded-full ${onClick ? "cursor-pointer" : ""}`}
     >

@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api/client";
 import type { MaterialSummary } from "@/lib/api/types";
 import { resolveBookThumbnailSrc, type CoverSource } from "@/lib/materials/image";
 import DocumentPreviewCard, { type AttachmentVisibility } from "@/app/components/materials/DocumentPreviewCard";
+import { confirmAction } from "@/stores/confirm-store";
 
 // Matches HomeComposer's own `sm:` breakpoint decision — this modal takes
 // the same shape that one does (full-screen takeover on mobile, backdrop-
@@ -261,10 +262,14 @@ export default function AddBookModal({
     metadataEditor.commit(attachment.file, attachment.materialId, { coverSource });
   }
 
-  function removeFile(index: number) {
+  async function removeFile(index: number) {
     const attachment = files[index];
     const isEditTarget = !!editMaterial && attachment.materialId === editMaterial.id;
-    if (isEditTarget && !window.confirm(`Delete "${attachment.title}"? This can't be undone.`)) return;
+    if (
+      isEditTarget &&
+      !(await confirmAction({ title: `Delete "${attachment.title}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true }))
+    )
+      return;
 
     if (attachment.status === "done" && attachment.materialId) {
       apiFetch(`/materials/${attachment.materialId}`, { method: "DELETE" }).catch(() => {});

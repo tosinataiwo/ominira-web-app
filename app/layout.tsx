@@ -8,6 +8,7 @@ import AppSplashScreen from "./components/pwa/AppSplashScreen";
 import NowPlayingBar from "./components/NowPlayingBar";
 import RoomLayer from "./components/room/RoomLayer";
 import Toaster from "./components/shared/Toaster";
+import ConfirmDialog from "./components/shared/ConfirmDialog";
 import ThemeProvider from "./components/ThemeProvider";
 import QueryProvider from "./components/QueryProvider";
 import NarrationEngine from "@/lib/audio/NarrationEngine";
@@ -129,6 +130,7 @@ export default function RootLayout({
           <NowPlayingBar />
           <RoomLayer />
           <Toaster />
+          <ConfirmDialog />
           {/* `mode` is explicit (rather than relying on the "auto" default)
            * so a local `bun run dev` never reports as production even if
            * NODE_ENV gets overridden by tooling — only a real production

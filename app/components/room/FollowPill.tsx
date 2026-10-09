@@ -7,7 +7,8 @@ import { useFollowing } from "@/lib/room/hooks";
 import { useRoomStore } from "@/stores/room-store";
 
 // Above the mini-player while you're in the book's reader (spec §3, M3/M4):
-// "Following Ada", or after a scroll of your own, solid "Return to Ada"
+// "Reading along with Ada" (never "Following" — that reads as a profile
+// follow), or after a scroll of your own, solid "Return to Ada"
 // with an arrow towards her; × stops. A moderator's Bring everyone to my
 // page makes everyone follow them (spec §9).
 
@@ -32,7 +33,7 @@ export default function FollowPill() {
           <Arrow size={16} strokeWidth={2.25} className="flex-none" />
           <span className="truncate">Return to {name}</span>
         </button>
-        <button type="button" aria-label={`Stop following ${name}`} onClick={() => session.unfollow()} className={`${close} hover:bg-white/15`}>
+        <button type="button" aria-label={`Stop reading along with ${name}`} onClick={() => session.unfollow()} className={`${close} hover:bg-white/15`}>
           <X size={16} strokeWidth={2.25} />
         </button>
       </div>
@@ -42,10 +43,10 @@ export default function FollowPill() {
   return (
     <div className={`${pill} border border-brand-300 bg-[var(--reader-surface)] pl-1.5 text-[var(--reader-text)]`}>
       <RoomAvatar member={following.member} size={24} />
-      <span className="truncate pl-2">Following {name}</span>
+      <span className="truncate pl-2">Reading along with {name}</span>
       <button
         type="button"
-        aria-label={`Stop following ${name}`}
+        aria-label={`Stop reading along with ${name}`}
         onClick={() => session.unfollow()}
         className={`${close} text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]`}
       >

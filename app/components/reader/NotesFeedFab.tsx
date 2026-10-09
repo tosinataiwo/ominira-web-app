@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import { MessageCircle, PenLine, Plus } from "lucide-react";
+import { BookOpen, MessageCircle, PenLine, Plus } from "lucide-react";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
@@ -116,8 +116,9 @@ export default function NotesFeedFab({
   // on the folded FAB while it's on.
   const room = useRoomEntry(materialId);
   const roomOn = room !== null && room.state !== "start";
-  // In the room on this book, a tap on a fellow member's face follows them
-  // (spec §1.6) rather than opening their card.
+  // In the room on this book, a fellow member's card offers to read along
+  // with them (spec §1.6) — go where they go in the book. Not a profile
+  // follow, so it's never worded as one.
   const { tap, followingId } = useFollowTap();
   const { data: me } = useProfile();
   const presence = usePresence(materialId);
@@ -247,7 +248,16 @@ export default function NotesFeedFab({
         visible ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
       }`}
     >
-      {card && <ProfileCard key={card.readerId} face={card} onOpen={() => openCard(card)} />}
+      {card && (
+        <ProfileCard
+          key={card.readerId}
+          face={card}
+          onOpen={() => openCard(card)}
+          readAlong={tap(card.readerId)}
+          readingAlong={followingId === card.readerId}
+          onReadAlong={() => setCard(null)}
+        />
+      )}
 
       {bubble && (
         <button
@@ -283,10 +293,7 @@ export default function NotesFeedFab({
             <MyFace me={me} />
           </span>
           {roomOn && (
-            <span
-              aria-hidden="true"
-              className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-brand-500 ring-2 ring-[var(--reader-surface)]"
-            />
+            <LiveBadge live="listen" className="absolute right-0.5 top-0.5" />
           )}
         </button>
       ) : (
@@ -304,17 +311,13 @@ export default function NotesFeedFab({
             <>
               <div className="flex flex-row items-center shell:flex-col">
                 {shown.map((f, i) => {
-                  const follow = tap(f.readerId);
-                  const following = followingId === f.readerId;
-                  const label = follow
-                    ? `${following ? "Stop following" : "Follow"} ${comradeName(f.pseudonym)}`
-                    : faceLabel(f);
+                  const label = faceLabel(f, followingId === f.readerId);
                   return (
                     <button
                       key={f.readerId}
-                      onClick={follow ?? (() => toggleCard(f))}
+                      onClick={() => toggleCard(f)}
                       aria-label={label}
-                      {...(follow ? { "aria-pressed": following } : { "aria-expanded": card?.readerId === f.readerId })}
+                      aria-expanded={card?.readerId === f.readerId}
                       title={label}
                       style={{ animationDelay: `${i * 70}ms`, zIndex: MAX_FACES + 1 - i }}
                       className={`reader-face-in relative cursor-pointer rounded-full transition-transform duration-150 hover:z-10 hover:scale-105 active:scale-95 ${
@@ -403,7 +406,20 @@ const FLOAT =
 /** A comrade's card, opened from their face: who they are and where they
  * read from on one line, what they're doing under it, and — when they've
  * left any — a muted note count under that, which opens them. */
-function ProfileCard({ face, onOpen }: { face: Face; onOpen: () => void }) {
+function ProfileCard({
+  face,
+  onOpen,
+  readAlong,
+  readingAlong,
+  onReadAlong,
+}: {
+  face: Face;
+  onOpen: () => void;
+  /** Present when you're both in the book's room: toggles reading along. */
+  readAlong: (() => void) | null;
+  readingAlong: boolean;
+  onReadAlong: () => void;
+}) {
   const name = comradeName(face.pseudonym);
   const status = face.live
     ? { text: face.live === "listen" ? "Currently listening" : "Currently reading", live: face.live }
@@ -442,6 +458,24 @@ function ProfileCard({ face, onOpen }: { face: Face; onOpen: () => void }) {
           )}
         </div>
       </div>
+      {readAlong && (
+        <button
+          type="button"
+          onClick={() => {
+            readAlong();
+            onReadAlong();
+          }}
+          aria-pressed={readingAlong}
+          className={`mt-3 flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full border text-[12px] font-bold transition-colors ${
+            readingAlong
+              ? "border-[var(--reader-border)] bg-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
+              : "border-transparent bg-brand-500 text-white hover:bg-brand-600"
+          }`}
+        >
+          <BookOpen size={14} strokeWidth={2.25} />
+          {readingAlong ? "Stop reading along" : "Read along"}
+        </button>
+      )}
     </div>
   );
 }
@@ -473,8 +507,9 @@ function MyFace({ me, open = false }: { me: ReturnType<typeof useProfile>["data"
   );
 }
 
-function faceLabel(f: Face) {
+function faceLabel(f: Face, readingAlong = false) {
   const name = comradeName(f.pseudonym);
+  if (readingAlong) return `Reading along with ${name}`;
   if (f.live) return `${name} is currently ${f.live === "listen" ? "listening" : "reading"}`;
   if (f.wroteHere) return `${name} wrote here`;
   return `${name} wrote in ${f.wroteIn || "this book"}`;

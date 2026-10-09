@@ -15,6 +15,7 @@ import HighlightCard from "./HighlightCard";
 import EntryMenu from "./EntryMenu";
 import ReplyEntry from "./ReplyEntry";
 import type { ThreadActions, ThreadUIState } from "@/lib/reader/threadTypes";
+import { confirmAction } from "@/stores/confirm-store";
 
 // Reply threads default to their first two entries, with the rest behind a
 // "Show N more" expander — matches the redesigned Thread View, and keeps a
@@ -140,9 +141,10 @@ export default function NoteThreadCard({
                         ui.startEdit(note.id);
                         ui.toggleMenu(null);
                       }}
-                      onDelete={() => {
-                        actions.delete(note.id);
+                      onDelete={async () => {
                         ui.toggleMenu(null);
+                        if (await confirmAction({ title: "Delete this note?", message: "Its replies go with it. This can't be undone.", confirmLabel: "Delete", danger: true }))
+                          actions.delete(note.id);
                       }}
                       onClose={() => ui.toggleMenu(null)}
                     />

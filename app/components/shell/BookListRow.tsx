@@ -14,6 +14,7 @@ import AddBookModal from "@/app/components/shell/AddBookModal";
 import { apiFetch } from "@/lib/api/client";
 import { buildResumeHref, positionPercent } from "@/lib/reader/locator";
 import type { CurrentReadingEntry } from "@/lib/api/types";
+import { confirmAction } from "@/stores/confirm-store";
 
 /**
  * List-row book tile — Claude Design "Library catalogue listing" project,
@@ -246,7 +247,8 @@ export default function BookListRow({
   }`;
 
   async function deleteNow() {
-    if (!window.confirm(`Delete "${material.title}"? This can't be undone.`)) return;
+    const ok = await confirmAction({ title: `Delete "${material.title}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true });
+    if (!ok) return;
     await apiFetch(`/materials/${material.id}`, { method: "DELETE" });
     onDeleted?.(material.id);
   }

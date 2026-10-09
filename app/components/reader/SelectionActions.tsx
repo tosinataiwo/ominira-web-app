@@ -10,6 +10,7 @@ import { useReaderStore } from "@/stores/reader-store";
 import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
 import SelectionMenu, { type Item } from "./SelectionMenu";
 import ShareQuoteModal from "./ShareQuoteModal";
+import { confirmAction, DELETE_ANNOTATION } from "@/stores/confirm-store";
 
 const NARROW_QUERY = "(max-width: 859px)";
 /** The phone/desktop split every reader uses (useSectionCarousel's 860px) —
@@ -150,7 +151,9 @@ export default function SelectionActions({
           ]
         : []),
       ...(hasExistingAnnotation
-        ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: onDelete, danger: true }]
+        ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: async () => {
+          if (await confirmAction(DELETE_ANNOTATION)) onDelete();
+        }, danger: true }]
         : []),
     ];
   };

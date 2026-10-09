@@ -33,7 +33,8 @@ export default function RoomActions({ onChat }: { onChat?: () => void }) {
   const { handRaised, connection, isModerator } = controls;
 
   return (
-    <div className="relative flex items-center justify-center gap-2 shell:gap-3">
+    // Wraps on narrow phones rather than running past the card's edges.
+    <div className="relative flex min-w-0 flex-wrap items-center justify-center gap-2 shell:gap-3">
       {onChat && (
         <button
           type="button"
@@ -73,7 +74,7 @@ export default function RoomActions({ onChat }: { onChat?: () => void }) {
           aria-label="Share screen"
           title="Share screen"
           onClick={() => {
-            if (session.summonEveryone()) showToast("Everyone's following you now.");
+            if (session.summonEveryone()) showToast("Everyone's reading along with you now.");
           }}
           className={`${iconButton} border-[var(--reader-border)] bg-[var(--reader-surface)] text-[var(--reader-text)]`}
         >
