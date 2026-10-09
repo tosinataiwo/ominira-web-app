@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { ApiError, ensureFreshSession } from "@/lib/api/client";
 import type { AnnotationRange } from "@/lib/api/types";
+import { setAudioSessionType } from "@/lib/room/audioSession"; // REVERT: remove with the call in enter()
 import type { RoomSession, RoomSnapshot } from "@/lib/room/session";
 import type { PendingPassage } from "@/lib/room/sharePassage";
 import type { ReaderView } from "@/lib/room/view";
@@ -82,6 +83,7 @@ export const useRoomStore = create<RoomState>()((set, get) => {
     if (!readerId) throw new Error("Sign in to join a room.");
     // Still inside the tap: the only moment browsers let a page start sound
     // (spec §8.6). Everything after this awaits.
+    setAudioSessionType("playback"); // REVERT: remove this line (iOS audio session, lib/room/audioSession.ts)
     const audio = new AudioContext();
     void audio.resume();
     await get().leave();

@@ -3,12 +3,16 @@
 // the track for 60 s, so on again is instant; then the device is released
 // (the OS mic indicator goes off) and the next on reacquires it silently.
 
+import { setAudioSessionType } from "@/lib/room/audioSession"; // REVERT: remove with the two calls below
+
 export type MicState = "off" | "acquiring" | "on" | "blocked";
 
 const RELEASE_AFTER_MS = 60_000;
 
 const CONSTRAINTS: MediaStreamConstraints = {
-  audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+  // autoGainControl off: it dipped speakers' volume now and then.
+  // REVERT: set autoGainControl back to true.
+  audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false, channelCount: 1 },
 };
 
 export type Mic = {
@@ -46,6 +50,7 @@ export function createMic(options: Options): Mic {
     releaseTimer = null;
     track?.stop();
     track = null;
+    setAudioSessionType("playback"); // REVERT: remove this line (iOS audio session)
   };
 
   const scheduleRelease = () => {
@@ -53,8 +58,9 @@ export function createMic(options: Options): Mic {
   };
 
   // One getUserMedia at a time; a second caller waits on the same one.
-  const acquire = () =>
-    (acquiring ??= media
+  const acquire = () => {
+    setAudioSessionType("play-and-record"); // REVERT: remove this line (iOS audio session)
+    return (acquiring ??= media
       .getUserMedia(CONSTRAINTS)
       .then((stream) => {
         const next = stream.getAudioTracks()[0] ?? null;
@@ -71,6 +77,7 @@ export function createMic(options: Options): Mic {
       .finally(() => {
         acquiring = null;
       }));
+  };
 
   /** A device change while on: the new track first, then the old one goes. */
   async function replace() {
