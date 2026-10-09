@@ -17,6 +17,8 @@ import HomeAuthBanner from "./HomeAuthBanner";
 import HomeInstallBanner from "./HomeInstallBanner";
 import HomePushPrompt from "./HomePushPrompt";
 
+const SHOW_HOME_COMPOSER = false;
+
 /** Stand-in for a NoteCard while `GET /api/community/notes` is still in
  * flight — same flush flat-row footprint as the real card, at every width,
  * so the feed's layout doesn't jump once real cards swap in, and so this
@@ -74,7 +76,8 @@ export default function HomeCommunityFeed() {
       </div>
 
       <div className="mx-auto max-w-[640px]">
-        {isAuthenticated && (
+        {/* Temporarily hidden — flip SHOW_HOME_COMPOSER to restore. */}
+        {SHOW_HOME_COMPOSER && isAuthenticated && (
           <div className="mb-8">
             <HomeComposer defaultTopicId={topicId} />
           </div>
