@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getMaterialDetail, MaterialNotFoundError, type MaterialDetail } from "@/lib/materials/detail";
 import MaterialDetailView from "@/app/components/materials/MaterialDetailView";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
+import { resolveBookCoverSrc } from "@/lib/materials/image";
 
 // generateMetadata and the page both need the book; load it once per request.
 const getDetail = cache(getMaterialDetail);
@@ -57,6 +58,7 @@ export default async function MaterialDetailPage({
     throw err;
   }
   const blurb = blurbOf(material);
+  const image = resolveBookCoverSrc(material);
   // schema.org Book, so search engines read title/author/cover directly.
   const jsonLd = {
     "@context": "https://schema.org",
@@ -64,7 +66,7 @@ export default async function MaterialDetailPage({
     name: material.title,
     author: { "@type": "Person", name: material.author },
     url: `${PLATFORM_URL}/library/${slug}`,
-    ...(material.cover && { image: material.cover }),
+    ...(image && { image }),
     ...(blurb && { description: blurb }),
     ...(material.publishedYear && { datePublished: String(material.publishedYear) }),
   };

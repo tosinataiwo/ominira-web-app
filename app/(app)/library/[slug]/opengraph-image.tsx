@@ -3,6 +3,7 @@ import { BRAND_BG } from "@/lib/config/brand-assets";
 import { OG_SIZE, brandImage } from "@/lib/config/og";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
+import { resolveBookCoverSrc } from "@/lib/materials/image";
 
 // A book's share card, served from our own domain: X won't reliably fetch the
 // Supabase cover URL, and crops a 2:3 cover to a thin strip in a large card.
@@ -27,9 +28,14 @@ async function loadCover(url: string | null) {
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const row = await resolveMaterialRow(slug);
-  const book = row ? await projectMaterial(row, { fields: ["title", "author", "cover"] }) : null;
+  const book = row
+    ? await projectMaterial(row, {
+        fields: ["title", "author", "cover", "coverSource", "openlibraryCoverUrl", "googleCoverUrl"],
+      })
+    : null;
   const [cover, wordmark] = await Promise.all([
-    loadCover((book?.cover as string | null) ?? null),
+    // Same pick as the page's hero cover: our upload, else OpenLibrary/Google.
+    loadCover(book ? resolveBookCoverSrc(book) : null),
     brandImage("wordmark-light.png"),
   ]);
 
