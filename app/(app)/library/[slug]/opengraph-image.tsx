@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { BRAND_BG } from "@/lib/config/brand-assets";
-import { OG_SIZE, brandImage } from "@/lib/config/og";
+import { OG_ACCENT, OG_SIZE, brandImage } from "@/lib/config/og";
+import { PLATFORM_HOST } from "@/lib/config/platform";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
@@ -67,7 +68,11 @@ export default async function Image({ params }: { params: Promise<{ slug: string
             {(book?.title as string) ?? "Ominira"}
           </div>
           {book?.author ? <div style={{ fontSize: 34, color: "#57534e" }}>{book.author as string}</div> : null}
-          <img src={wordmark} width={300} height={119} alt="" style={{ marginLeft: -30 }} />
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <img src={wordmark} width={300} height={119} alt="" style={{ marginLeft: -30 }} />
+            {/* The wordmark PNG has ~40px of padding below the letters. */}
+            <div style={{ marginTop: -36, fontSize: 30, fontWeight: 700, color: OG_ACCENT }}>{PLATFORM_HOST}</div>
+          </div>
         </div>
       </div>
     ),
