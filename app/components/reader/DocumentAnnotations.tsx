@@ -1,46 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Headphones, Highlighter, MessageCircle, MessageSquareQuote, Trash2 } from "lucide-react";
-import { useDockedHeight } from "@/app/components/useBottomDock";
+import { MessageCircle } from "lucide-react";
 import type { SelectionSurface } from "@/lib/annotations/surface";
 import { useTextSelection } from "@/lib/annotations/useTextSelection";
-import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
 import { useFeed } from "@/lib/reader/useFeed";
-import { useShareToRoom } from "@/lib/room/sharePassage";
 import { useScrollChrome } from "@/lib/reader/useScrollChrome";
 import { PENDING_ANNOTATION_ID, useTextAnnotations } from "@/lib/reader/useTextAnnotations";
-import { useReaderStore } from "@/stores/reader-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { Annotation } from "@/stores/library-store";
-import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
 import FeedPanel from "./notes/FeedPanel";
 import NotesFeedFab from "./NotesFeedFab";
 import NotesSidebar from "./NotesSidebar";
-import SelectionMenu, { type Item } from "./SelectionMenu";
-
-const NARROW_QUERY = "(max-width: 859px)";
-/** The phone/desktop split every reader uses (useSectionCarousel's 860px) —
- * picks the bottom-bar menu and the bottom-sheet notes panel. */
-export function useNarrowViewport() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const query = window.matchMedia(NARROW_QUERY);
-      query.addEventListener("change", onChange);
-      return () => query.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia(NARROW_QUERY).matches,
-    () => false
-  );
-}
+import SelectionActions, { useNarrowViewport, useShareQuote } from "./SelectionActions";
 
 /**
  * Highlighting and notes for a single-document reader (PDF, web article,
  * DOCX) — everything the EPUB reader has, wired once: the shared selection
- * engine on the document's surface, the selection menu (Highlight / Note /
- * Copy / Delete), the signed-out and couldn't-save prompts, the notes panel,
+ * engine on the document's surface, the selection menu (SelectionActions), the signed-out and couldn't-save prompts, the notes panel,
  * and the notes feed with its FAB. The reader supplies only its surface (the
  * geometry of its text), where its blocks sit (`locate`) and how to reach one
  * (`jumpToBlock`), and draws its own highlights from `annotations.getForPassage`.
@@ -53,6 +32,7 @@ export function useNarrowViewport() {
  */
 export function useDocumentAnnotations({
   materialId,
+  title,
   surface,
   scrollEl,
   layoutKey,
@@ -64,6 +44,8 @@ export function useDocumentAnnotations({
   onListenFrom,
 }: {
   materialId: string;
+  /** For the selection menu's quote card. */
+  title: string;
   surface: SelectionSurface | null;
   scrollEl: HTMLElement | null;
   /** See useTextSelection's own — anything that moves the text without resizing
@@ -80,13 +62,10 @@ export function useDocumentAnnotations({
   /** Draw the selection behind the text — DOM text in an `isolate` scroller
    * (see useTextSelection's `beneath`). */
   selectionBeneath?: boolean;
-  /** Adds "Listen from here" to the selection menu: narration from the
+  /** Adds Listen to the selection menu: narration from the
    * selection's first word, `block` and `offset` as the surface gives them. */
   onListenFrom?: (block: string, offset: number) => void;
 }) {
-  // The menu's mobile bar sits above the narration bar / room player.
-  const dockedHeight = useDockedHeight();
-  const theme = useReaderStore((s) => s.theme);
   const isMobile = useNarrowViewport();
   const annotations = useTextAnnotations(materialId);
   const {
@@ -105,7 +84,7 @@ export function useDocumentAnnotations({
   } = annotations;
 
   const feed = useFeed({ materialId, locate });
-  const shareToRoom = useShareToRoom(materialId);
+  const shareQuote = useShareQuote(title);
   const scrollChrome = useScrollChrome(scrollEl);
   const { close: closeFeed } = feed;
   // One slot for both panels, and the room's mini-player can open the feed
@@ -132,96 +111,30 @@ export function useDocumentAnnotations({
     beneath: selectionBeneath,
   });
 
-  const [copied, setCopied] = useState(false);
-  const copySelection = () => {
-    if (!selection) return;
-    void navigator.clipboard.writeText(quoteForRanges(selection.ranges, getPassageText)).then(() => {
-      setCopied(true);
-      setTimeout(() => {
-        setCopied(false);
-        dismissSelection();
-      }, 800);
-    });
-  };
-
   const activeSectionId = activeBlock ? locate(activeBlock)?.sectionId : undefined;
-  const iconSize = isMobile ? 18 : 14;
   const chrome: ReactNode = (
     <>
       {selectionOverlay}
-      {selection && (
-        <SelectionMenu
-          anchor={selection.anchor}
-          isMobile={isMobile}
-          bottomOffsetPx={dockedHeight}
-          theme={theme}
-          items={
-            [
-              { key: "highlight", icon: <Highlighter size={iconSize} />, label: "Highlight", onClick: highlightSelection },
-              { key: "note", icon: <MessageCircle size={iconSize} />, label: "Note", onClick: noteFromSelection },
-              { key: "copy", icon: <Copy size={iconSize} />, label: copied ? "Copied ✓" : "Copy", onClick: copySelection },
-              ...(onListenFrom
-                ? [
-                    {
-                      key: "listen",
-                      icon: <Headphones size={iconSize} />,
-                      label: "Listen from here",
-                      onClick: () => {
-                        const { passageId, start } = selection.ranges[0];
-                        onListenFrom(passageId, start);
-                        dismissSelection();
-                      },
-                    },
-                  ]
-                : []),
-              ...(shareToRoom
-                ? [
-                    {
-                      key: "room",
-                      icon: <MessageSquareQuote size={iconSize} />,
-                      label: "Share to room",
-                      onClick: () => {
-                        shareToRoom({
-                          ranges: selection.ranges,
-                          quote: quoteForRanges(selection.ranges, getPassageText),
-                          label: locate(selection.ranges[0].passageId)?.label ?? "",
-                        });
-                        closeNotesPanel();
-                        feed.openRoom();
-                        dismissSelection();
-                      },
-                    },
-                  ]
-                : []),
-              ...(hasExistingAnnotation
-                ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: deleteSelection, danger: true }]
-                : []),
-            ] as Item[]
-          }
-          onDismiss={dismissSelection}
-        />
-      )}
-      {overlay && (
-        <SelectionMenu
-          anchor={overlay.anchor}
-          isMobile={isMobile}
-          bottomOffsetPx={dockedHeight}
-          theme={theme}
-          items={[]}
-          override={
-            overlay.kind === "auth" ? (
-              <MembersOnlyPrompt action="highlight" onClose={dismissOverlay} />
-            ) : (
-              <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
-                <p className="m-0 text-[13px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
-                  Couldn&rsquo;t save — check your connection and try again.
-                </p>
-              </div>
-            )
-          }
-          onDismiss={dismissOverlay}
-        />
-      )}
+      {shareQuote.modal}
+      <SelectionActions
+        materialId={materialId}
+        selection={selection}
+        overlay={overlay}
+        getPassageText={getPassageText}
+        locationLabel={(block) => locate(block)?.label ?? ""}
+        hasExistingAnnotation={hasExistingAnnotation}
+        onHighlight={highlightSelection}
+        onNote={noteFromSelection}
+        onDelete={deleteSelection}
+        onDismiss={dismissSelection}
+        onDismissOverlay={dismissOverlay}
+        onListenFrom={onListenFrom}
+        onShare={shareQuote.share}
+        onSharedToRoom={() => {
+          closeNotesPanel();
+          feed.openRoom();
+        }}
+      />
       {/* The same notes panel and feed as the EPUB reader: over the right edge
           on desktop, a bottom sheet on phones. Opening one closes the other. */}
       {(notesPanel || feed.open) && (
@@ -239,7 +152,7 @@ export function useDocumentAnnotations({
                 targetThreadId={notesPanel.targetThreadId}
                 panelType={isMobile ? "sheet" : "side"}
                 onClose={closeNotesPanel}
-                onShare={() => {}}
+                onShare={shareQuote.share}
               />
             ) : (
               <FeedPanel

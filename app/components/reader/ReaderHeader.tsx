@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Moon, Play, Search, SquareArrowOutUpRight, Sun, X } from "lucide-react";
+import { ArrowLeft, Headphones, Moon, Search, SquareArrowOutUpRight, Sun, X } from "lucide-react";
 import type { Section } from "@/lib/book/schema";
 import { useReaderStore } from "@/stores/reader-store";
 import Tooltip from "./Tooltip";
@@ -186,7 +186,7 @@ export default function ReaderHeader({
         {canListen && !isListen && onListen && (
           <Tooltip label="Listen to this book" side="bottom">
             <button onClick={onListen} aria-label="Listen to this book" className={iconButtonClass}>
-              <Play size={16} />
+              <Headphones size={16} />
             </button>
           </Tooltip>
         )}

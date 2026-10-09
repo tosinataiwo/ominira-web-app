@@ -34,14 +34,15 @@ export function useArticleAnnotations({
   onListenFrom,
 }: {
   materialId: string;
-  /** Labels the notes feed's run for text before the first heading. */
+  /** Labels the notes feed's run for text before the first heading, and
+   * the selection menu's quote card. */
   title: string;
   /** useArticleProgress's content ref, called through. */
   contentRef: (el: HTMLDivElement | null) => void;
   scrollElement: HTMLDivElement | null;
   /** The reader has landed (useArticleProgress's resumeApplied). */
   ready: boolean;
-  /** "Listen from here" on a selection — see useDocumentAnnotations. */
+  /** Listen on a selection — see useDocumentAnnotations. */
   onListenFrom?: (block: string, offset: number) => void;
 }) {
   const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
@@ -87,6 +88,7 @@ export function useArticleAnnotations({
 
   const { annotations, onMarkClick, chrome } = useDocumentAnnotations({
     materialId,
+    title,
     surface,
     scrollEl: scrollElement,
     getPassageText,

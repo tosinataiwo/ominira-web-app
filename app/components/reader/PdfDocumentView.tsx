@@ -580,7 +580,7 @@ function PdfReaderBody({
     const doc = narrationDocument();
     if (doc) useAudioStore.getState().openBook(doc, materialId);
   }, [narrationDocument, materialId]);
-  // "Listen from here": from the selection's first word, on its page.
+  // Listen on a selection: from the selection's first word, on its page.
   const listenFrom = useCallback(
     (block: string, offset: number) => {
       const pageIndex = pdfPageIndexOf(block);
@@ -628,6 +628,7 @@ function PdfReaderBody({
   // each page (PdfHighlightLayer), are the PDF's own.
   const { annotations, onMarkClick, chrome } = useDocumentAnnotations({
     materialId,
+    title,
     surface,
     scrollEl,
     layoutKey: `${zoomLevel}|${geometryVersion}`,

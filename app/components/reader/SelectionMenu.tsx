@@ -32,16 +32,14 @@ type Props = {
    * *opposite* direction of the page it floats over. */
   theme: Theme;
   /** Caller builds its own icon/label/action list — this component only
-   * knows how to lay one out and float it, not what it means. Two call
-   * sites in Reader.tsx: the fresh-selection pill (Highlight/Note/Copy/
-   * Delete) and the click-an-existing-mark popover (Remove highlight/Add
-   * note or View thread), each with a different action set. */
+   * knows how to lay one out and float it, not what it means. The selection
+   * actions themselves are defined once, in SelectionActions. */
   items: Item[];
   /** Renders in place of `items` (both the desktop pill and the mobile
    * bottom bar) when present — reuses this component's own clamped-position/
    * dismiss mechanics for content that isn't an action list, e.g. the
    * signed-out MembersOnlyPrompt or a brief "couldn't save" message after a
-   * failed optimistic write (see Reader.tsx's own selection handling). */
+   * failed optimistic write (see SelectionActions). */
   override?: ReactNode;
   onDismiss: () => void;
 };
@@ -57,8 +55,7 @@ const VIEWPORT_MARGIN = 8;
  * Floating action pill, shown on text selection or on clicking an existing
  * mark. A fixed-position overlay rendered outside BookContent's scrollable
  * tree, so selecting text never forces the (memoized) book content to
- * re-render. No Share — sharing is out of scope for now (per product
- * decision).
+ * re-render.
  *
  * Inverts against the reading page (note-redesign.md): a light page gets a
  * near-black pill, a dark page gets a near-white one — the same idiom as a

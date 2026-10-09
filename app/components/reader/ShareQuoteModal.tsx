@@ -8,7 +8,7 @@ import { SPLASH_MARK } from "@/lib/config/brand-assets";
 
 type Props = {
   quote: string;
-  author: string;
+  author?: string;
   bookTitle: string;
   onClose: () => void;
 };
@@ -180,7 +180,7 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
 
             <div className="flex flex-none flex-col gap-1 pt-5">
               <p className="m-0 text-[13px] font-medium text-[var(--color-sand-500)]">
-                {bookTitle} - {cleanAuthor(author)}
+                {bookTitle}{author ? ` - ${cleanAuthor(author)}` : ""}
               </p>
               <p className="m-0 text-[11px] font-semibold tracking-[0.16em] text-[var(--color-sand-400)]">
                 {PLATFORM_HOST}

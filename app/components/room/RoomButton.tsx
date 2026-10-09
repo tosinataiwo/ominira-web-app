@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, MicVocal } from "lucide-react";
+import { Loader2, MicSignal } from "lucide-react";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { materialKeys } from "@/lib/materials/queryKeys";
 import { useMaterialRoom } from "@/lib/room/useMaterialRoom";
@@ -72,7 +72,7 @@ export default function RoomButton({ materialId, onOpen }: { materialId: string;
       title={label}
       className="relative flex h-10 w-10 flex-none cursor-pointer items-center justify-center rounded-full text-[var(--reader-text-muted)] transition-colors hover:bg-[var(--reader-surface-hover)] disabled:cursor-default disabled:opacity-60"
     >
-      {pending ? <Loader2 size={20} className="animate-spin" /> : <MicVocal size={21} strokeWidth={2} />}
+      {pending ? <Loader2 size={20} className="animate-spin" /> : <MicSignal size={21} strokeWidth={2} />}
       {entry.state === "in" && entry.unread > 0 ? (
         <UnreadBadge count={entry.unread} className="absolute right-0 top-0.5 ring-2 ring-[var(--reader-surface)]" />
       ) : (

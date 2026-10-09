@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
 import NotesSidebar from "./NotesSidebar";
 import FeedPanel from "./notes/FeedPanel";
 import { epubFeedLocator, type FeedEntry } from "@/lib/reader/annotationFeed";
 import SearchModal from "../SearchModal";
 import FootnotePopover from "./FootnotePopover";
-import ShareQuoteModal from "./ShareQuoteModal";
 import type { NoteLookup } from "./PassageContent";
 import BookContent from "./BookContent";
 import DocumentEndPanel from "./DocumentEndPanel";
@@ -15,8 +13,7 @@ import ReaderHeader from "./ReaderHeader";
 import NotesFeedFab from "./NotesFeedFab";
 import ChaptersDrawer from "./ChaptersDrawer";
 import ChapterNavFooter from "./ChapterNavFooter";
-import SelectionMenu, { type Item } from "./SelectionMenu";
-import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
+import SelectionActions, { useShareQuote } from "./SelectionActions";
 import BackToCurrentButton from "./BackToCurrentButton";
 import Loader from "../Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
@@ -28,6 +25,7 @@ import { activeRoom, useRoomStore } from "@/stores/room-store";
 import { useDockedHeight, useNarrationBarHeight } from "@/app/components/useBottomDock";
 import { useNarrationStore } from "@/stores/narration-store";
 import { useNarratedWord } from "./useNarratedWord";
+import { spokenPassageText, wordIndexAt } from "@/lib/audio/narrationText";
 import { buildSectionsById, resolveSpineTarget } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
@@ -38,12 +36,10 @@ import { createDomSurface } from "@/lib/annotations/surface";
 import { useTextSelection } from "@/lib/annotations/useTextSelection";
 import { useFeed } from "@/lib/reader/useFeed";
 import { useServerPositionReady } from "@/lib/reader/useServerPositionReady";
-import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
 import { buildEpubScale } from "@/lib/reader/locator";
 import { epubView } from "@/lib/room/view";
 import { useRoomView } from "@/lib/room/useRoomView";
-import { useShareToRoom } from "@/lib/room/sharePassage";
 
 export default function Reader({
   book,
@@ -113,13 +109,11 @@ export default function Reader({
   onClose?: () => void;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
-  const [copyLabel, setCopyLabel] = useState("Copy");
   const [chaptersOpen, setChaptersOpen] = useState(false);
   // Set from either the fresh-selection pill's Share action or NotesSidebar's
   // "Share passage" menu item — both just need the quote text; author/book
   // title/cover come straight from `book` below, the same for either entry
   // point.
-  const [shareQuote, setShareQuote] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState<{ note: NoteLookup; top: number; left: number } | null>(
     null
   );
@@ -309,7 +303,7 @@ export default function Reader({
 
   const locateFeedEntry = useMemo(() => epubFeedLocator(orderedSections), [orderedSections]);
   const noteFeed = useFeed({ materialId, locate: locateFeedEntry });
-  const shareToRoom = useShareToRoom(materialId);
+  const shareQuote = useShareQuote(book.metadata.title, book.metadata.author);
 
   // Published so NowPlayingBar (rendered in the root layout, well outside
   // this tree) can pull its own right edge in on desktop — see
@@ -740,6 +734,24 @@ export default function Reader({
     (passageId: string) => passageLookup.byId.get(passageId)?.text ?? "",
     [passageLookup]
   );
+  // Listen on a selection: narration from its first word.
+  const listenFrom = useCallback(
+    (passageId: string, offset: number) => {
+      const passage = passageLookup.byId.get(passageId);
+      const sectionId = passageLookup.sectionOf.get(passageId);
+      if (!passage || !sectionId) return;
+      // Narration counts words in the spoken text (note markers dropped).
+      const spoken = spokenPassageText({
+        ...passage,
+        text: passage.text.slice(0, offset),
+        marks: passage.marks?.filter((m) => m.end <= offset),
+      });
+      const wordIndex = wordIndexAt(spoken, spoken.length);
+      if (isListen) seekToPassageForListening(sectionId, passageId, wordIndex);
+      else openBookAtPassage(liveBook, materialId, sectionId, passageId, wordIndex);
+    },
+    [passageLookup, isListen, seekToPassageForListening, openBookAtPassage, liveBook, materialId]
+  );
   const onInternalLinkClick = useCallback(
     (sectionId: string, fragmentId?: string) => {
       // A link mark's sectionId can resolve to a navigation label rather
@@ -894,18 +906,6 @@ export default function Reader({
       left: Math.min(window.innerWidth - 336, Math.max(8, rect.left - 140)),
     });
   }, []);
-
-  const menuCopy = () => {
-    if (!selection) return;
-    const text = quoteForRanges(selection.ranges, getPassageText);
-    navigator.clipboard.writeText(text).then(() => {
-      setCopyLabel("Copied ✓");
-      setTimeout(() => {
-        setCopyLabel("Copy");
-        dismissSelection();
-      }, 800);
-    });
-  };
 
   // The outline (and, same reasoning, the notes panel) forces the header
   // away for as long as either is open (rather than trying to reserve/
@@ -1115,89 +1115,29 @@ export default function Reader({
                 thread directly, no menu. */}
                 
             {selectionOverlay}
-            {selection && (
-              <SelectionMenu
-                anchor={selection.anchor}
-                isMobile={isMobile}
-                bottomOffsetPx={dockedHeight}
-                theme={theme}
-                items={
-                  [
-                    { key: "highlight", icon: <Highlighter size={isMobile ? 18 : 14} />, label: "Highlight", onClick: highlightSelection },
-                    {
-                      key: "note",
-                      icon: <MessageCircle size={isMobile ? 18 : 14} />,
-                      label: "Note",
-                      onClick: () => {
-                        noteFeed.close();
-                        noteFromSelection();
-                      },
-                    },
-                    { key: "copy", icon: <Copy size={isMobile ? 18 : 14} />, label: copyLabel, onClick: menuCopy },
-                    {
-                      key: "share",
-                      icon: <Share size={isMobile ? 18 : 14} />,
-                      label: "Share",
-                      onClick: () => {
-                        setShareQuote(quoteForRanges(selection.ranges, getPassageText));
-                        dismissSelection();
-                      },
-                    },
-                    ...(shareToRoom
-                      ? [
-                          {
-                            key: "room",
-                            icon: <MessageSquareQuote size={isMobile ? 18 : 14} />,
-                            label: "Share to room",
-                            onClick: () => {
-                              shareToRoom({
-                                ranges: selection.ranges,
-                                quote: quoteForRanges(selection.ranges, getPassageText),
-                                label: locateFeedEntry(selection.ranges[0].passageId)?.label ?? "",
-                              });
-                              if (notesPanel) closeNotesPanel();
-                              noteFeed.openRoom();
-                              dismissSelection();
-                            },
-                          },
-                        ]
-                      : []),
-                    ...(hasExistingAnnotation
-                      ? [{ key: "delete", icon: <Trash2 size={isMobile ? 18 : 14} />, label: "Delete", onClick: deleteSelection, danger: true }]
-                      : []),
-                  ] as Item[]
-                }
-                onDismiss={dismissSelection}
-              />
-            )}
-
-            {/* Replaces the pill above in place — a signed-out highlight
-                attempt (MembersOnlyPrompt, stays up until dismissed) or a
-                failed optimistic highlight create/delete (a brief message,
-                self-clears — see useTextAnnotations' own timer). Never both
-                at once: highlightSelection/deleteSelection always clear
-                `selection` before setting this. */}
-            {overlay && (
-              <SelectionMenu
-                anchor={overlay.anchor}
-                isMobile={isMobile}
-                bottomOffsetPx={dockedHeight}
-                theme={theme}
-                items={[]}
-                override={
-                  overlay.kind === "auth" ? (
-                    <MembersOnlyPrompt action="highlight" onClose={dismissOverlay} />
-                  ) : (
-                    <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
-                      <p className="m-0 text-[13px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
-                        Couldn&rsquo;t save — check your connection and try again.
-                      </p>
-                    </div>
-                  )
-                }
-                onDismiss={dismissOverlay}
-              />
-            )}
+            {shareQuote.modal}
+            <SelectionActions
+              materialId={materialId}
+              selection={selection}
+              overlay={overlay}
+              getPassageText={getPassageText}
+              locationLabel={(passageId) => locateFeedEntry(passageId)?.label ?? ""}
+              hasExistingAnnotation={hasExistingAnnotation}
+              onHighlight={highlightSelection}
+              onNote={() => {
+                noteFeed.close();
+                noteFromSelection();
+              }}
+              onDelete={deleteSelection}
+              onDismiss={dismissSelection}
+              onDismissOverlay={dismissOverlay}
+              onListenFrom={canListen ? listenFrom : undefined}
+              onShare={shareQuote.share}
+              onSharedToRoom={() => {
+                if (notesPanel) closeNotesPanel();
+                noteFeed.openRoom();
+              }}
+            />
 
             {searchOpen && (
               <div className="absolute inset-0 z-50">
@@ -1225,16 +1165,6 @@ export default function Reader({
               />
             )}
 
-            {shareQuote !== null && (
-              <div className="absolute inset-0 z-50">
-                <ShareQuoteModal
-                  quote={shareQuote}
-                  author={book.metadata.author}
-                  bookTitle={book.metadata.title}
-                  onClose={() => setShareQuote(null)}
-                />
-              </div>
-            )}
           </div>
 
           {/* Notes panel — a push-drawer on desktop (mirrors ChaptersDrawer,
@@ -1289,7 +1219,7 @@ export default function Reader({
                 targetThreadId={notesPanel.targetThreadId}
                 panelType={isMobile ? "sheet" : "side"}
                 onClose={closeNotesPanel}
-                onShare={setShareQuote}
+                onShare={shareQuote.share}
               />
             )}
           </div>

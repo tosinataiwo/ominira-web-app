@@ -19,8 +19,8 @@ import { useNarratedWord } from "./useNarratedWord";
 const HIGHLIGHT = "om-narrating-word";
 
 /**
- * Listening for DOCX and web articles: the header's Play button, and
- * "Listen from here" on a selection (`listenFrom`). Playback
+ * Listening for DOCX and web articles: the header's Listen button, and
+ * Listen on a selection (`listenFrom`). Playback
  * itself is the shared NarrationEngine's, fed by articleNarrationDocument;
  * ArticleNarrationFollower does the per-word work.
  */
