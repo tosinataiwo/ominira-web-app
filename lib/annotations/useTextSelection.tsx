@@ -493,17 +493,23 @@ export function useTextSelection({
   if (!sel || !scrollEl || !boxes.length) return null;
   const first = boxes[0];
   const last = boxes[boxes.length - 1];
+  const layer = "pointer-events-none absolute left-0 top-0";
   return createPortal(
-    <div
-      aria-hidden="true"
-      className={`pointer-events-none absolute left-0 top-0 ${beneath ? "z-[-1]" : "reader-selection-layer z-[5]"}`}
-      style={{ width: 0, height: 0 }}
-    >
-      {boxes.map((b, i) => (
-        <div key={i} className="absolute" style={{ ...b, background: "var(--reader-highlight)", borderRadius: 2 }} />
-      ))}
+    <>
+      <div
+        aria-hidden="true"
+        className={`${layer} ${beneath ? "z-[-1]" : "reader-selection-layer z-[5]"}`}
+        style={{ width: 0, height: 0 }}
+      >
+        {boxes.map((b, i) => (
+          <div key={i} className="absolute" style={{ ...b, background: "var(--reader-highlight)", borderRadius: 2 }} />
+        ))}
+      </div>
+      {/* The handles get their own layer above the text, even when the wash
+          is beneath it — under the text, touches land on the passage and the
+          handles can't be grabbed. */}
       {sel.touch && (
-        <>
+        <div aria-hidden="true" className={`${layer} z-[5]`} style={{ width: 0, height: 0 }}>
           <SelectionHandle x={first.left} top={first.top} height={first.height} knob="top" onStart={(e) => startHandleDrag("start", e)} />
           <SelectionHandle
             x={last.left + last.width}
@@ -512,9 +518,9 @@ export function useTextSelection({
             knob="bottom"
             onStart={(e) => startHandleDrag("end", e)}
           />
-        </>
+        </div>
       )}
-    </div>,
+    </>,
     scrollEl
   );
 }
