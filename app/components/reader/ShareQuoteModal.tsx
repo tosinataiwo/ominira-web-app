@@ -156,7 +156,7 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
             </span>
 
             <div className="min-h-0 flex-1 overflow-hidden">
-              <p className="m-0 line-clamp-[6] font-serif italic text-[18px] leading-[1.4] text-[var(--color-sand-900)] md:line-clamp-[16]">
+              <p className="m-0 line-clamp-[6] font-serif text-[18px] leading-[1.4] text-[var(--color-sand-900)] md:line-clamp-[16]">
                 {quote}
               </p>
             </div>
